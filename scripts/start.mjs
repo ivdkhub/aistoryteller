@@ -17,7 +17,8 @@ if (major < MIN[0] || (major === MIN[0] && minor < MIN[1])) {
 
 function run(args, label) {
   console.log(label);
-  const r = spawnSync('npm', args, { cwd: ROOT, stdio: 'inherit', shell: true });
+  // npm su Windows è un file .cmd: serve la shell, con il comando come stringa unica (argomenti fissi).
+  const r = spawnSync(`npm ${args.join(' ')}`, { cwd: ROOT, stdio: 'inherit', shell: true });
   if (r.status !== 0) {
     console.error(`Comando non riuscito: npm ${args.join(' ')}`);
     process.exit(1);
@@ -47,13 +48,13 @@ function newest(p) {
 // Dipendenze: assenti o più vecchie del package-lock.json.
 const installed = path.join(ROOT, 'node_modules', '.package-lock.json');
 if (!fs.existsSync(installed) || mtime(path.join(ROOT, 'package-lock.json')) > mtime(installed)) {
-  run(['ci', '--no-audit', '--no-fund'], 'Installo le dipendenze (solo la prima volta o dopo un aggiornamento)…');
+  run(['ci', '--no-audit', '--no-fund'], 'Installo le dipendenze (solo la prima volta o dopo un aggiornamento)...');
 }
 
 // Interfaccia: assente o più vecchia dei sorgenti.
 const built = mtime(path.join(ROOT, 'dist', 'index.html'));
 const sources = Math.max(newest(path.join(ROOT, 'src')), newest(path.join(ROOT, 'shared')), mtime(path.join(ROOT, 'index.html')), mtime(path.join(ROOT, 'package-lock.json')));
-if (!built || sources > built) run(['run', 'build'], 'Preparo l\'interfaccia…');
+if (!built || sources > built) run(['run', 'build'], 'Preparo l\'interfaccia...');
 
 process.env.OPEN_BROWSER ??= '1';
 await import(pathToFileURL(path.join(ROOT, 'server', 'index.ts')).href);

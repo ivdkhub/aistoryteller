@@ -2,3 +2,5 @@
 *.bat text eol=crlf
 *.png binary
 *.jpg binary
+# Impostazioni personali: non vanno nei pacchetti distribuiti (git archive).
+.claude/ export-ignore

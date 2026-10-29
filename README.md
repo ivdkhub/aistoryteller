@@ -5,10 +5,12 @@ episodi e inquadrature. Gira nel browser del tuo computer; nessun collegamento a
 
 ## Avvio
 
-Doppio clic su `start.bat`. Al primo avvio installa le dipendenze e prepara l'interfaccia, poi apre
-<http://localhost:5178>. Per fermarlo chiudi la finestra nera.
+1. Installa **Node.js 22.18 o successivo** (versione LTS da <https://nodejs.org>).
+2. Doppio clic su `start.bat`.
 
-Serve Node.js 24 o successivo (usa il database SQLite integrato in Node).
+Al primo avvio installa le dipendenze e prepara l'interfaccia (circa 15 secondi), poi apre
+<http://localhost:5178>. Agli avvii successivi ricompila l'interfaccia solo se è stata aggiornata. Se l'app è
+già aperta, `start.bat` apre solo il browser. Per fermarla chiudi la finestra nera.
 
 ## Cosa contiene
 
@@ -35,9 +37,20 @@ Serve Node.js 24 o successivo (usa il database SQLite integrato in Node).
 
 - Archivio: `data/storyteller.db`. Ogni giorno, all'avvio, una copia va in `data/backups/` (ultime 14).
 - File caricati dall'app: `data/media/`.
-- I file collegati dal disco restano dove sono: l'app li legge soltanto, solo dentro le cartelle elencate in
-  `config.json` → `allowedRoots`. Aggiungi lì altre cartelle se servono.
+- I file collegati dal disco restano dove sono: l'app li legge soltanto, e solo dentro le **cartelle dei
+  contenuti** (di default la cartella utente). Si cambiano da *Import e backup → Cartelle dei contenuti*.
 - Da *Import e backup* puoi scaricare e ripristinare un backup completo in JSON.
+
+## Impostazioni
+
+`config.json` contiene i valori di partenza distribuiti con l'app. Le impostazioni di questo PC stanno in
+`config.local.json` (creato dall'app, non va condiviso), ad esempio:
+
+```json
+{ "port": 5179, "allowedRoots": ["C:\\Users\\nome\\Documenti\\Contenuti"] }
+```
+
+Le API rispondono solo a richieste da questo computer (`localhost`) e dalla pagina dell'app.
 
 ## Claude Code (server MCP)
 
@@ -73,7 +86,8 @@ Esempi di richieste:
 
 ```
 npm run dev        # server + Vite con ricarica automatica (http://localhost:5173)
-npm test           # test del parser e dello scanner
+npm test           # test unitari (parser, scanner, avanzamento, strutture e cartelle)
+npm run test:e2e   # usa l'app in Edge/Chrome headless; E2E_SEASON=<documento> prova anche l'import
 npm run typecheck
 npm run build      # rigenera dist/ dopo modifiche all'interfaccia
 ```
