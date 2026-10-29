@@ -60,7 +60,7 @@ l'app aperta nel browser mostra le modifiche entro pochi secondi.
 Registrazione (una volta sola, per tutte le cartelle):
 
 ```
-claude mcp add --scope user ai-story-teller -- node "C:\Spazio di lavoro\ivdk\Uitlità\AI Story teller\server\mcp.ts"
+claude mcp add --scope user ai-story-teller -- node "<cartella di AI Story Teller>\server\mcp.ts"
 ```
 
 Aperto in questa cartella, Claude Code lo trova anche da `.mcp.json`.
