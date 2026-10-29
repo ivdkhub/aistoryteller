@@ -8,7 +8,7 @@ import { exec } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import * as db from './db.ts';
 import { updateShot } from './service.ts';
-import { applyScan, scanProject } from './scanner.ts';
+import { applyScan, episodeCuts, scanProject } from './scanner.ts';
 import { applySeason, previewSeason, type SeasonImportOptions } from './importers/applySeason.ts';
 import { episodeMarkdown, timelineCsv } from './exporters.ts';
 import { defaultPackDir, elevenLabsScript, remotionPack, remotionTimeline } from './production.ts';
@@ -154,6 +154,11 @@ app.post<{ Body: SeasonImportOptions }>('/api/import/season/apply', (req) => app
 
 app.get<{ Params: { id: string } }>('/api/projects/:id/scan', (req) => scanProject(req.params.id));
 app.post<{ Params: { id: string } }>('/api/projects/:id/scan', (req) => ({ updated: applyScan(req.params.id) }));
+
+app.get<{ Params: { id: string } }>('/api/episodes/:id/cuts', (req, reply) => {
+  if (!db.get('episode', req.params.id)) return reply.status(404).send({ error: 'Non trovato' });
+  return episodeCuts(req.params.id);
+});
 
 app.get<{ Params: { id: string } }>('/api/episodes/:id/remotion', (req, reply) => {
   const ep = db.get('episode', req.params.id);

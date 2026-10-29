@@ -150,3 +150,82 @@ export function applyScan(projectId: string): number {
   });
   return n;
 }
+
+export interface Cut {
+  path: string;
+  name: string;
+  label: string;
+  final: boolean;
+  version: number;
+  size: number;
+  modified: string;
+  subtitles: string;
+}
+
+/** Cartella dell'episodio dentro quella del progetto: la prima sottocartella (fino a due livelli) che si chiama come il codice. */
+export function findEpisodeDir(root: string, code: string): string {
+  const want = code.toLowerCase();
+  let level = [root];
+  for (let depth = 0; depth < 2 && level.length; depth++) {
+    const next: string[] = [];
+    for (const dir of level) {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const e of entries) {
+        if (!e.isDirectory()) continue;
+        if (e.name.toLowerCase() === want) return path.join(dir, e.name);
+        if (!SKIP.has(e.name.toLowerCase()) && !DISCARD.test(e.name)) next.push(path.join(dir, e.name));
+      }
+    }
+    level = next;
+  }
+  return '';
+}
+
+/** Video montati nella cartella deliverables: prima la versione finale, poi le bozze dalla più recente. */
+export function listCuts(dir: string): Cut[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const cuts = names
+    .filter((n) => VIDEO.test(n))
+    .map((name): Cut => {
+      const full = path.join(dir, name);
+      const stat = fs.statSync(full);
+      const stem = name.replace(/\.[^.]+$/, '');
+      const draft = stem.match(/(?:^|[_\s-])(?:bozza|draft)[_\s-]?v?(\d+)(?=[_\s.-]|$)/i);
+      const srt = names.find((n) => n.toLowerCase() === `${stem}.srt`.toLowerCase());
+      return {
+        path: full,
+        name,
+        label: draft ? `Bozza v${Number(draft[1])}` : 'Finale',
+        final: !draft,
+        version: draft ? Number(draft[1]) : 0,
+        size: stat.size,
+        modified: stat.mtime.toISOString(),
+        subtitles: srt ? path.join(dir, srt) : '',
+      };
+    });
+  // Più file "finali" (nomi diversi): li distingue il nome.
+  if (cuts.filter((c) => c.final).length > 1) for (const c of cuts) if (c.final) c.label = c.name.replace(/\.[^.]+$/, '');
+  return cuts.sort((a, b) => Number(b.final) - Number(a.final) || b.version - a.version || b.modified.localeCompare(a.modified));
+}
+
+export function episodeCuts(episodeId: string): { folder: string; cuts: Cut[] } {
+  const ep = db.get('episode', episodeId);
+  const project = ep && db.get('project', ep.projectId);
+  if (!ep || !project?.folder || !ep.code) return { folder: '', cuts: [] };
+  const epDir = findEpisodeDir(project.folder, ep.code);
+  if (!epDir) return { folder: '', cuts: [] };
+  const sub = fs.readdirSync(epDir).find((n) => /^(deliverables|montaggi|montato|final|export)$/i.test(n) && fs.statSync(path.join(epDir, n)).isDirectory());
+  if (!sub) return { folder: '', cuts: [] };
+  const folder = path.join(epDir, sub);
+  return { folder, cuts: listCuts(folder) };
+}

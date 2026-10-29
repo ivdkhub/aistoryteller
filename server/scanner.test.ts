@@ -1,6 +1,8 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { matchFiles, walk, type FileEntry } from './scanner.ts';
+import { findEpisodeDir, listCuts, matchFiles, walk, type FileEntry } from './scanner.ts';
 import type { ShotStatus } from '../shared/types.ts';
 
 const shot = (code: string, status: ShotStatus = 'todo') => ({ id: code, code, imageFile: '', videoFile: '', status });
@@ -43,5 +45,33 @@ describe.runIf(fs.existsSync(EP02))('scanner sulla cartella reale EP02', () => {
     expect(s05.image).toMatch(/EP02_S05\.png$/);
     expect(s05.video).toMatch(/EP02_S05_VID\.mp4$/);
     expect(res.filter((m) => m.image).length).toBeGreaterThan(15);
+  });
+});
+
+describe("montaggi dell'episodio", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cuts-'));
+  const deliv = path.join(root, 'Serie', 'EP01', 'deliverables');
+  fs.mkdirSync(deliv, { recursive: true });
+  fs.mkdirSync(path.join(root, 'Serie', 'scartate', 'EP01'), { recursive: true });
+  for (const n of ['EP01_final.mp4', 'EP01_final.srt', 'EP01_final_bozza_v1.mp4', 'EP01_final_bozza_v3.mp4', 'EP01_final_bozza_v2.mp4', 'sorgente.zip', 'timeline.csv']) {
+    fs.writeFileSync(path.join(deliv, n), 'x');
+  }
+
+  it("trova la cartella dell'episodio ignorando le scartate", () => {
+    expect(findEpisodeDir(root, 'ep01')).toBe(path.join(root, 'Serie', 'EP01'));
+    expect(findEpisodeDir(root, 'EP09')).toBe('');
+  });
+
+  it('elenca solo i video: finale per primo, poi le bozze dalla più recente', () => {
+    const cuts = listCuts(deliv);
+    expect(cuts.map((c) => c.label)).toEqual(['Finale', 'Bozza v3', 'Bozza v2', 'Bozza v1']);
+    expect(cuts[0].subtitles).toBe(path.join(deliv, 'EP01_final.srt'));
+    expect(cuts[1].subtitles).toBe('');
+  });
+
+  it('riconosce la bozza anche in mezzo al nome', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cuts-'));
+    fs.writeFileSync(path.join(dir, 'EP02_bozza_v1_1080x1920.mp4'), 'x');
+    expect(listCuts(dir)[0]).toMatchObject({ label: 'Bozza v1', final: false });
   });
 });

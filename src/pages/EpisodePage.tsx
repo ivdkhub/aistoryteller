@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, request, useAutosave, useFetch, useItem, useItems } from '../api.ts';
+import { api, fileUrl, request, useAutosave, useFetch, useItem, useItems } from '../api.ts';
 import { Area, CopyButton, DeleteButton, Empty, Field, Media, SaveBadge, Select, Tabs, Text } from '../components/ui.tsx';
 import { ShotEditor } from '../components/ShotEditor.tsx';
 import { PromptList } from '../components/PromptList.tsx';
 import { EpisodeProgress } from '../components/EpisodeProgress.tsx';
 import { checkShot } from '../../shared/consistency.ts';
-import { estimateSeconds, speakers } from '../util.ts';
+import { estimateSeconds, formatDate, speakers } from '../util.ts';
 import {
   EPISODE_FORMAT_LABEL, EPISODE_STATUS_LABEL, SHOT_STATUS_LABEL,
   type Episode, type EpisodeFormat, type EpisodeStatus, type Metrics, type Shot, type ShotStatus,
@@ -92,6 +92,50 @@ export function EpisodePage() {
   );
 }
 
+interface Cut {
+  path: string;
+  name: string;
+  label: string;
+  final: boolean;
+  size: number;
+  modified: string;
+}
+
+/** Video montati dell'episodio, letti da <cartella progetto>/<CODICE>/deliverables. */
+function EpisodeCuts({ episodeId }: { episodeId: string }) {
+  const { data, error } = useFetch<{ folder: string; cuts: Cut[] }>(`/episodes/${episodeId}/cuts`);
+  if (error) return <p className="error">{error}</p>;
+  if (!data) return null;
+  return (
+    <section className="cuts">
+      <header className="cuts-head">
+        <h3>Montaggi dell'episodio</h3>
+        {data.folder && <span className="muted cuts-folder" title={data.folder}>{data.folder}</span>}
+      </header>
+      {data.cuts.length === 0 ? (
+        <p className="muted">
+          Nessun video montato. Mettili nella sottocartella <code>deliverables</code> della cartella dell'episodio (es. <code>EP01/deliverables</code>).
+        </p>
+      ) : (
+        <div className="cuts-grid">
+          {data.cuts.map((c) => (
+            <figure key={c.path} className={`cut${c.final ? ' cut-final' : ''}`}>
+              <video src={fileUrl(c.path)} controls playsInline preload="metadata" />
+              <figcaption>
+                <strong>{c.label}</strong>
+                <span className="muted">
+                  {formatDate(c.modified)} · {Math.round(c.size / 1048576)} MB
+                </span>
+                <span className="cut-name" title={c.path}>{c.name}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 const FILTERS: ('' | ShotStatus)[] = ['', 'todo', 'image', 'video', 'edited', 'discarded'];
 
 function ShotBoard({ episode, shots }: { episode: Episode; shots: Shot[] }) {
@@ -160,6 +204,7 @@ function ShotBoard({ episode, shots }: { episode: Episode; shots: Shot[] }) {
             <p>Aggiungine una oppure collega la cartella del progetto e usa “Risincronizza i file”.</p>
           </Empty>
         )}
+        {filter === 'edited' && <EpisodeCuts episodeId={episode.id} />}
         {view === 'frames' ? (
           <div className="frames">
             {visible.map((s) => (

@@ -664,6 +664,18 @@ kbd { font: 11px var(--font); background: var(--fill-2); border-radius: 4px; pad
 .board.with-drawer { grid-template-columns: minmax(0, 1fr) 440px; }
 .board-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 16px 12px; }
+/* Video montati dell'episodio (filtro "Montato") */
+.cuts { background: var(--window-2); border-radius: var(--r-card); padding: 12px 14px 14px; margin-bottom: 16px; }
+.cuts-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; min-width: 0; }
+.cuts-head h3 { margin: 0; font-size: 13px; font-weight: 600; flex: none; }
+.cuts-folder { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cuts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.cut { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cut video { width: 100%; aspect-ratio: 9 / 16; object-fit: contain; background: #000; border-radius: 8px; box-shadow: var(--card-shadow); }
+.cut-final video { box-shadow: 0 0 0 2px var(--green), var(--card-shadow); }
+.cut figcaption { display: flex; flex-direction: column; gap: 1px; font-size: 12px; min-width: 0; }
+.cut-final strong { color: var(--green); }
+.cut-name { font: 11px var(--mono); color: var(--label-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .frame { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; border: 0; background: none; text-align: center; cursor: default; color: inherit; font: inherit; min-width: 0; }
 .frame-img {
   position: relative;
