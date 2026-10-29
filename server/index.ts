@@ -156,6 +156,7 @@ app.get<{ Params: { id: string; format: string } }>('/api/episodes/:id/export.:f
 });
 
 app.get('/api/config', () => ({ allowedRoots: config.allowedRoots, dataDir: db.DATA_DIR }));
+app.get('/api/changes', () => ({ stamp: db.stamp() }));
 
 // --- Interfaccia -----------------------------------------------------------
 const DIST = path.join(ROOT, 'dist');

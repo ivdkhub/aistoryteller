@@ -28,6 +28,7 @@ export function openDb(file = DB_FILE): DatabaseSync {
   db = new DatabaseSync(file);
   db.exec(`
     PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,
@@ -153,6 +154,15 @@ export function remove(id: string): number {
     .prepare('DELETE FROM items WHERE id = ? OR account_id = ? OR project_id = ? OR episode_id = ? OR shot_id = ?')
     .run(id, id, id, id, id);
   return Number(res.changes);
+}
+
+/**
+ * Timbro dell'archivio: cambia a ogni creazione, modifica o eliminazione,
+ * anche fatte da un altro processo (es. il server MCP usato da Claude Code).
+ */
+export function stamp(): string {
+  const r = db.prepare('SELECT COUNT(*) AS n, MAX(updated_at) AS t FROM items').get() as { n: number; t: string | null };
+  return `${r.n}:${r.t ?? ''}`;
 }
 
 export function search(q: string, limit = 60): Item[] {

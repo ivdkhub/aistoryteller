@@ -19,6 +19,31 @@ function useVersion() {
   );
 }
 
+/**
+ * Controlla ogni pochi secondi se l'archivio è cambiato fuori dalla pagina
+ * (es. modifiche di Claude Code tramite il server MCP) e ricarica i dati.
+ */
+export function watchChanges(intervalMs = 2500) {
+  let last = '';
+  const check = async () => {
+    if (document.hidden) return;
+    try {
+      const { stamp } = await request<{ stamp: string }>('/changes');
+      if (last && stamp !== last) bump();
+      last = stamp;
+    } catch {
+      // Server non raggiungibile: si riprova al prossimo giro.
+    }
+  };
+  void check();
+  const t = window.setInterval(check, intervalMs);
+  document.addEventListener('visibilitychange', check);
+  return () => {
+    window.clearInterval(t);
+    document.removeEventListener('visibilitychange', check);
+  };
+}
+
 export async function request<T>(url: string, opts: RequestInit = {}): Promise<T> {
   const headers = opts.body && !(opts.body instanceof FormData) ? { 'content-type': 'application/json' } : undefined;
   const res = await fetch(`/api${url}`, { ...opts, headers });

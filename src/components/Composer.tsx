@@ -1,44 +1,15 @@
 // Composer: prefisso di stile + descrizioni fisse dei personaggi + scena → prompt immagine;
 // movimento + regole di continuità + Avoid → prompt video.
-import { useMemo, useState } from 'react';
-import { api, baseName, useItems } from '../api.ts';
+import { useState } from 'react';
+import { api, useItems } from '../api.ts';
 import { Area, CopyButton, Field, Select, Text } from './ui.tsx';
-import { TOOLS, type Character, type Shot, type StylePreset } from '../../shared/types.ts';
+import { TOOLS, type Character, type Shot } from '../../shared/types.ts';
+import { attachmentsFor, buildImagePrompt, buildVideoPrompt } from '../../shared/compose.ts';
 
 interface Props {
   projectId: string;
   shot?: Shot;
   onApplied?: () => void;
-}
-
-export function buildImagePrompt(style: StylePreset | undefined, cast: Character[], extraRefs: string[], scene: string) {
-  const parts: string[] = [];
-  if (style?.prefix) parts.push(style.prefix.trim());
-  let n = 0;
-  for (const c of cast) {
-    if (c.images.length) {
-      n++;
-      parts.push(`Use the character from reference image ${n} exactly (same face, hair and clothes): ${c.fixedDescription || c.name}.`);
-    } else if (c.fixedDescription) {
-      parts.push(`${c.name}: ${c.fixedDescription}.`);
-    }
-  }
-  for (const r of extraRefs) {
-    n++;
-    parts.push(`Match reference image ${n} (${r}).`);
-  }
-  if (scene.trim()) parts.push(scene.trim());
-  return parts.join(' ').replace(/\.\./g, '.');
-}
-
-export function buildVideoPrompt(style: StylePreset | undefined, cast: Character[], motion: string) {
-  const parts: string[] = [];
-  if (style?.prefix) parts.push(style.prefix.trim());
-  if (motion.trim()) parts.push(motion.trim());
-  const rules = cast.flatMap((c) => c.continuityRules);
-  if (rules.length) parts.push(`Continuity: ${rules.join('; ')}.`);
-  if (style?.avoid) parts.push(`Avoid: ${style.avoid.trim()}`);
-  return parts.join(' ');
 }
 
 export function Composer({ projectId, shot, onApplied }: Props) {
@@ -64,12 +35,9 @@ export function Composer({ projectId, shot, onApplied }: Props) {
   const cast = castIds.map((id) => characters?.find((c) => c.id === id)).filter((c): c is Character => !!c);
   const extraRefs = refs.split('\n').map((r) => r.trim()).filter(Boolean);
 
-  const imagePrompt = useMemo(() => buildImagePrompt(imageStyle, cast, extraRefs, scene), [imageStyle, cast, extraRefs, scene]);
-  const videoPrompt = useMemo(() => buildVideoPrompt(videoStyle, cast, motion), [videoStyle, cast, motion]);
-  const attachments = [
-    ...cast.filter((c) => c.images.length).map((c) => `${baseName(c.images[0].path)} (${c.name})`),
-    ...extraRefs,
-  ];
+  const imagePrompt = buildImagePrompt(imageStyle, cast, extraRefs, scene);
+  const videoPrompt = buildVideoPrompt(videoStyle, cast, motion);
+  const attachments = attachmentsFor(cast, extraRefs);
 
   const toggle = (id: string) => setCastIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 

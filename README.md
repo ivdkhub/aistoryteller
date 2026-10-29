@@ -39,6 +39,36 @@ Serve Node.js 24 o successivo (usa il database SQLite integrato in Node).
   `config.json` → `allowedRoots`. Aggiungi lì altre cartelle se servono.
 - Da *Import e backup* puoi scaricare e ripristinare un backup completo in JSON.
 
+## Claude Code (server MCP)
+
+AI Story Teller include un server MCP: Claude Code può usare ogni funzione dell'app da qualsiasi cartella, e
+l'app aperta nel browser mostra le modifiche entro pochi secondi.
+
+Registrazione (una volta sola, per tutte le cartelle):
+
+```
+claude mcp add --scope user ai-story-teller -- node "C:\Spazio di lavoro\ivdk\Uitlità\AI Story teller\server\mcp.ts"
+```
+
+Aperto in questa cartella, Claude Code lo trova anche da `.mcp.json`.
+
+Strumenti: `panoramica`, `schema_campi`, `albero_progetto`, `elenca`, `leggi` (anche per codice, es. `EP02_S07`),
+`cerca`, `avanzamento_episodio`, `crea`, `modifica`, `elimina`, `crea_struttura` (un progetto intero in un colpo
+solo, rilanciabile senza doppioni), `componi_prompt`, `importa_serie`, `scansiona_cartella`, `esporta_episodio`,
+`piano_cartelle`, `crea_cartelle`, `esporta_backup`.
+
+Comandi pronti in Claude Code:
+
+- `/mcp__ai-story-teller__importa_cartella` — legge una cartella di lavoro locale e la porta nell'app.
+- `/mcp__ai-story-teller__prepara_cartelle` — crea le cartelle locali di un progetto leggendo dall'app.
+
+Esempi di richieste:
+
+- "Nell'EP03 di Bank Error cambia la caption e segna la voce come fatta."
+- "Crea su AI Story Teller un nuovo progetto AI Influencer per @margot con persona, 3 stili e 5 post."
+- "Ho sviluppato l'idea in questa cartella: importala nell'account Reel Riot."
+- "Preparami le cartelle del progetto in C:\Spazio di lavoro\ivdk\Contenuti."
+
 ## Sviluppo
 
 ```

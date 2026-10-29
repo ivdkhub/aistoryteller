@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ai-story-teller": {
+      "command": "node",
+      "args": ["server/mcp.ts"]
+    }
+  }
+}

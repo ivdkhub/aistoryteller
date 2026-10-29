@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { api, useItems } from '../api.ts';
+import { api, useItems, watchChanges } from '../api.ts';
 import { Area, Field, Modal, Select, Text } from './ui.tsx';
 import { AccountForm } from './forms.tsx';
 import { Icon, type IconName } from './Icon.tsx';
@@ -29,6 +29,7 @@ export function Layout() {
   const location = useLocation();
 
   useEffect(() => setMenu(false), [location.pathname]);
+  useEffect(() => watchChanges(), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
