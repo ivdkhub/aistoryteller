@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { api, baseName, copyText, fileUrl, isVideo, useFetch, type SaveState } from '../api.ts';
 import { SHOT_STATUS_LABEL, type ShotStatus } from '../../shared/types.ts';
 
@@ -32,15 +33,146 @@ export function Area({
   );
 }
 
+/** Menu a tendina in stile macOS: il menu si apre sopra il pulsante con la voce scelta allineata al pulsante. */
 export function Select<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: [T, string][] }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const current = options.findIndex(([v]) => v === value);
+  const label = current >= 0 ? options[current][1] : value;
+
+  const show = () => {
+    setActive(Math.max(current, 0));
+    setOpen(true);
+  };
+  const close = (refocus = true) => {
+    setOpen(false);
+    if (refocus) button.current?.focus();
+  };
+  const pick = (i: number) => {
+    const opt = options[i];
+    if (opt && opt[0] !== value) onChange(opt[0]);
+    close();
+  };
+
+  // Posizione: la voce scelta copre il pulsante, e il testo delle voci è allineato al testo del pulsante.
+  useLayoutEffect(() => {
+    const b = button.current, m = menu.current;
+    if (!open || !b || !m) return;
+    const r = b.getBoundingClientRect();
+    const margin = 6;
+    m.style.minWidth = `${r.width + 22}px`;
+    m.style.maxHeight = `${window.innerHeight - margin * 2}px`;
+    const item = m.querySelectorAll<HTMLElement>('.popup-item')[Math.max(current, 0)];
+    const offset = item ? item.offsetTop - (r.height - item.offsetHeight) / 2 : 0;
+    const h = m.offsetHeight, w = m.offsetWidth;
+    let top = r.top - offset;
+    if (top < margin) {
+      m.scrollTop = margin - top;
+      top = margin;
+    }
+    top = Math.max(margin, Math.min(top, window.innerHeight - h - margin));
+    const left = Math.max(margin, Math.min(r.left - 22, window.innerWidth - w - margin));
+    m.style.top = `${top}px`;
+    m.style.left = `${left}px`;
+    m.focus({ preventScroll: true });
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Chiusura con clic fuori, scorrimento o ridimensionamento della finestra.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menu.current?.contains(t) && !button.current?.contains(t)) close(false);
+    };
+    const onScroll = (e: Event) => !menu.current?.contains(e.target as Node) && close(false);
+    const onResize = () => close(false);
+    document.addEventListener('mousedown', onDown, true);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open) menu.current?.querySelectorAll<HTMLElement>('.popup-item')[active]?.scrollIntoView({ block: 'nearest' });
+  }, [open, active]);
+
+  const onMenuKey = (e: ReactKeyboardEvent) => {
+    const last = options.length - 1;
+    const keys: Record<string, () => void> = {
+      ArrowDown: () => setActive((a) => Math.min(a + 1, last)),
+      ArrowUp: () => setActive((a) => Math.max(a - 1, 0)),
+      Home: () => setActive(0),
+      End: () => setActive(last),
+      Enter: () => pick(active),
+      ' ': () => pick(active),
+      Escape: () => close(),
+      Tab: () => close(),
+    };
+    const action = keys[e.key];
+    if (action) {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+      return;
+    }
+    // Ricerca per lettera iniziale, come nei menu di macOS.
+    if (e.key.length === 1 && /\S/.test(e.key)) {
+      const k = e.key.toLowerCase();
+      const n = options.length;
+      for (let s = 1; s <= n; s++) {
+        const i = (active + s) % n;
+        if (options[i][1].toLowerCase().startsWith(k)) {
+          setActive(i);
+          break;
+        }
+      }
+    }
+  };
+
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value as T)}>
-      {options.map(([v, l]) => (
-        <option key={v} value={v}>
-          {l}
-        </option>
-      ))}
-    </select>
+    <>
+      <button
+        ref={button}
+        type="button"
+        className={`popup${open ? ' open' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => (open ? close() : show())}
+        onKeyDown={(e) => {
+          if (['ArrowDown', 'ArrowUp'].includes(e.key)) {
+            e.preventDefault();
+            show();
+          }
+        }}
+      >
+        {label}
+      </button>
+      {open &&
+        createPortal(
+          <div ref={menu} className="popup-menu" role="listbox" tabIndex={-1} onKeyDown={onMenuKey}>
+            {options.map(([v, l], i) => (
+              <div
+                key={v}
+                role="option"
+                aria-selected={v === value}
+                className={`popup-item${i === active ? ' active' : ''}`}
+                onMouseEnter={() => setActive(i)}
+                onMouseUp={() => pick(i)}
+              >
+                <span className="popup-check">{v === value ? '✓' : ''}</span>
+                {l}
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-// Test end-to-end dell'interfaccia: avvia il server su un archivio temporaneo e usa l'app con Edge/Chrome headless.
+﻿// Test end-to-end dell'interfaccia: avvia il server su un archivio temporaneo e usa l'app con Edge/Chrome headless.
 // Uso: npm run test:e2e   (variabili: E2E_SEASON = documento di stagione da importare, E2E_SHOTS = cartella screenshot)
 import fs from 'node:fs';
 import os from 'node:os';
@@ -143,6 +143,34 @@ await step('Episodio: inquadratura, prompt, avanzamento', async () => {
   await page.locator('.drawer').waitFor();
   assert((await page.locator('.drawer .prompt-field textarea').first().inputValue()) === 'Cinematic still, a door opens.', 'prompt non salvato');
   await shot('03-episodio');
+});
+
+await step('Menu a tendina in stile macOS', async () => {
+  const stato = page.locator('.episode-bar .field', { hasText: 'Stato' }).locator('.popup');
+  await stato.click();
+  const menu = page.locator('.popup-menu');
+  await menu.waitFor();
+  assert((await menu.locator('[aria-selected="true"]').innerText()).includes('✓'), 'manca la spunta sulla voce scelta');
+  const [b, m] = [await stato.boundingBox(), await menu.locator('[aria-selected="true"]').boundingBox()];
+  assert(Math.abs(b.y + b.height / 2 - (m.y + m.height / 2)) < 4, 'la voce scelta non è allineata al pulsante');
+  await page.waitForTimeout(250);
+  await shot('03b-menu-tendina');
+  await menu.getByRole('option', { name: 'Scrittura' }).click();
+  await menu.waitFor({ state: 'detached' });
+  assert((await stato.innerText()) === 'Scrittura', 'scelta col mouse non applicata');
+  await stato.focus();
+  await page.keyboard.press('ArrowDown');
+  await menu.waitFor();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await menu.waitFor({ state: 'detached' });
+  const scelta = await stato.innerText();
+  assert(scelta === 'In produzione', `scelta da tastiera non applicata (${scelta})`);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Escape');
+  await menu.waitFor({ state: 'detached' });
+  assert(await page.locator('.drawer').isVisible(), 'Escape ha chiuso anche il pannello');
+  await settle();
 });
 
 await step('Composer dei prompt dall\'inquadratura', async () => {
