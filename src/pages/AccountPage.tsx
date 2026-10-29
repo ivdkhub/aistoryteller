@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, useAutosave, useItem, useItems } from '../api.ts';
-import { Area, DeleteButton, Empty, Field, Modal, SaveBadge, Select, Text } from '../components/ui.tsx';
+import { Area, Avatar, DeleteButton, Empty, Field, Modal, SaveBadge, Select, Text } from '../components/ui.tsx';
 import { ProjectForm } from '../components/forms.tsx';
 import { PROJECT_STATUS_LABEL, PROJECT_TYPE_LABEL } from '../../shared/types.ts';
 
@@ -13,7 +13,21 @@ export function AccountPage() {
   const projects = useItems('project', { accountId: id });
   const characters = useItems('character');
   const [newProject, setNewProject] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const photo = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  const uploadPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      set({ avatar: (await api.upload(file)).path });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (item === null) return <Empty title="Account non trovato" />;
   if (!a) return null;
@@ -22,9 +36,11 @@ export function AccountPage() {
   return (
     <div className="page">
       <header className="page-head">
-        <span className="avatar avatar-lg" style={{ background: a.color }}>
-          {(a.name || a.handle || '?').replace('@', '').slice(0, 1).toUpperCase()}
-        </span>
+        <button type="button" className="avatar-edit" onClick={() => photo.current?.click()} title="Cambia foto profilo" aria-label="Cambia foto profilo">
+          <Avatar account={a} className="avatar avatar-lg" />
+          <span className="avatar-edit-hint">{uploading ? '…' : 'Modifica'}</span>
+        </button>
+        <input ref={photo} type="file" accept="image/*" hidden onChange={uploadPhoto} />
         <div className="grow">
           <h1>{a.name || a.handle || 'Account senza nome'}</h1>
           <p className="muted">{[a.handle, a.niche].filter(Boolean).join(' — ')}</p>
@@ -69,6 +85,20 @@ export function AccountPage() {
 
         <aside className="panel form">
           <h2>Profilo</h2>
+          <div className="field">
+            <span className="field-label">Foto profilo</span>
+            <div className="row">
+              <Avatar account={a} className="avatar avatar-md" />
+              <button type="button" className="btn btn-small" disabled={uploading} onClick={() => photo.current?.click()}>
+                {uploading ? 'Caricamento…' : a.avatar ? 'Cambia foto…' : 'Scegli foto…'}
+              </button>
+              {a.avatar && (
+                <button type="button" className="btn btn-small btn-ghost btn-danger-text" onClick={() => set({ avatar: '' })}>
+                  Rimuovi
+                </button>
+              )}
+            </div>
+          </div>
           <Field label="Nome">
             <Text value={a.name} onChange={(name) => set({ name })} />
           </Field>

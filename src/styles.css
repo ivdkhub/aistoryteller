@@ -282,6 +282,23 @@ hr { border: 0; border-top: 1px solid var(--separator); margin: 10px 0; }
   box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15);
 }
 .avatar-lg { width: 56px; height: 56px; font-size: 24px; }
+.avatar-md { width: 36px; height: 36px; font-size: 16px; }
+.avatar { overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-edit { position: relative; padding: 0; border: 0; background: none; border-radius: 50%; cursor: default; flex: none; }
+.avatar-edit-hint {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 600 10.5px var(--font);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.avatar-edit:hover .avatar-edit-hint, .avatar-edit:focus-visible .avatar-edit-hint { opacity: 1; }
 
 .content { background: var(--window); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .window-toolbar {
@@ -326,7 +343,19 @@ hr { border: 0; border-top: 1px solid var(--separator); margin: 10px 0; }
 .toolbar-search input { border: 0; background: none; box-shadow: none; padding: 0; height: 100%; font-size: 13px; }
 .toolbar-search input:focus { outline: none; }
 .toolbar-search:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); background: var(--control); }
-.main { flex: 1; overflow-y: auto; min-height: 0; }
+.main { flex: 1; overflow-y: auto; min-height: 0; background: var(--window); view-transition-name: page; }
+
+/* Apertura dal Dock come un'app di macOS: la pagina nuova si ingrandisce dall'icona, la vecchia svanisce. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-group(page) { animation: none; }
+::view-transition-old(page) { animation: page-out 0.2s cubic-bezier(0.4, 0, 1, 1) both; }
+::view-transition-new(page) { animation: page-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: var(--dock-origin, 50% 100%); }
+@keyframes page-in {
+  from { transform: scale(0.04); opacity: 0; border-radius: 40px; }
+  30% { opacity: 1; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes page-out { to { transform: scale(0.96); opacity: 0; } }
 
 /* ============ Dock ============ */
 .dock {
@@ -370,6 +399,9 @@ hr { border: 0; border-top: 1px solid var(--separator); margin: 10px 0; }
   border-radius: 50%;
   background: var(--label);
 }
+.dock-separator { align-self: stretch; width: 1px; margin: 4px 4px; background: color-mix(in srgb, var(--label) 22%, transparent); }
+.dock-account { overflow: hidden; font: 600 20px var(--font-display); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+.dock-account img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .app-icon { display: inline-flex; gap: 4px; padding: 14px 12px; border-radius: 16px; background: linear-gradient(180deg, #5ac8fa, #007aff); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 .app-icon i { width: 9px; height: 26px; border-radius: 2px; background: #fff; }
 .app-icon i:nth-child(2) { opacity: 0.6; }

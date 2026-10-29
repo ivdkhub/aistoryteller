@@ -1,7 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { api, baseName, copyText, fileUrl, isVideo, useFetch, type SaveState } from '../api.ts';
-import { SHOT_STATUS_LABEL, type ShotStatus } from '../../shared/types.ts';
+import { SHOT_STATUS_LABEL, type Account, type ShotStatus } from '../../shared/types.ts';
+
+export function initial(a: Pick<Account, 'name' | 'handle'>) {
+  return (a.name || a.handle || '?').replace('@', '').slice(0, 1).toUpperCase();
+}
+
+/** Foto profilo dell'account; senza foto (o se il file manca) mostra l'iniziale sul colore dell'account. */
+export function Avatar({ account, className = 'avatar' }: { account: Pick<Account, 'name' | 'handle' | 'color' | 'avatar'>; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [account.avatar]);
+  return (
+    <span className={className} style={{ background: account.color }}>
+      {account.avatar && !broken ? <img src={fileUrl(account.avatar)} alt="" draggable={false} onError={() => setBroken(true)} /> : initial(account)}
+    </span>
+  );
+}
 
 export function Field({ label, hint, children, wide }: { label: string; hint?: string; children: ReactNode; wide?: boolean }) {
   return (
@@ -162,7 +177,8 @@ export function Select<T extends string>({ value, onChange, options }: { value: 
                 role="option"
                 aria-selected={v === value}
                 className={`popup-item${i === active ? ' active' : ''}`}
-                onMouseEnter={() => setActive(i)}
+                // Solo movimenti veri: il menu che compare sotto un mouse fermo non cambia la voce attiva.
+                onMouseMove={(e) => (e.movementX || e.movementY) && i !== active && setActive(i)}
                 onMouseUp={() => pick(i)}
               >
                 <span className="popup-check">{v === value ? '✓' : ''}</span>

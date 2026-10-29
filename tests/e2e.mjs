@@ -86,6 +86,24 @@ await step('Crea un account dalla barra laterale', async () => {
   assert(await page.locator('.nav-account', { hasText: '@provaprofilo' }).isVisible(), 'handle senza @ non normalizzato');
 });
 
+await step('Foto profilo e account nel Dock', async () => {
+  const accountUrl = page.url();
+  // PNG 1x1 rosso
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+  await page.locator('input[type="file"][accept="image/*"]').setInputFiles({ name: 'profilo.png', mimeType: 'image/png', buffer: png });
+  await page.locator('.dock .dock-account img').waitFor();
+  await page.locator('.nav-account .avatar img').waitFor();
+  await settle();
+  await page.locator('.dock-item[aria-label="Calendario"]').click();
+  await page.waitForURL(/\/calendario$/);
+  await page.locator('.dock .dock-item', { has: page.locator('.dock-account') }).first().click();
+  await page.waitForURL(accountUrl);
+  await page.getByRole('heading', { name: 'Profilo di prova' }).waitFor();
+  await page.reload();
+  await page.locator('.page-head .avatar img').waitFor();
+  await shot('01b-foto-profilo-dock');
+});
+
 const projectUrls = {};
 for (const [type, label] of [['base', 'Progetto base'], ['characters', 'Progetto con personaggi'], ['ai_influencer', 'AI Influencer']]) {
   await step(`Crea un progetto "${label}"`, async () => {

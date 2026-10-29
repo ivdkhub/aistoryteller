@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { api, useFetch, useItems, watchChanges } from '../api.ts';
-import { Area, Field, Modal, Select, Text } from './ui.tsx';
+import { Area, Avatar, Field, Modal, Select, Text } from './ui.tsx';
 import { AccountForm } from './forms.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { ErrorBoundary } from './ErrorBoundary.tsx';
@@ -63,9 +64,7 @@ export function Layout() {
   const accountNode = (a: Account, satellite = false) => (
     <li key={a.id} className={satellite ? 'nav-satellite' : undefined}>
       <NavLink to={`/account/${a.id}`} className="nav-item nav-account">
-        <span className="avatar" style={{ background: a.color }}>
-          {(a.name || a.handle || '?').replace('@', '').slice(0, 1).toUpperCase()}
-        </span>
+        <Avatar account={a} />
         <span className="nav-account-text">
           <span>{a.name || a.handle || 'Senza nome'}</span>
           {a.handle && <small>{a.handle}</small>}
@@ -193,7 +192,7 @@ export function Layout() {
           </main>
         </div>
       </div>
-      <Dock />
+      <Dock accounts={accounts ?? []} />
 
       {newAccount && (
         <Modal title="Nuovo account Instagram" onClose={() => setNewAccount(false)}>
@@ -347,16 +346,55 @@ function MenuBar({ menus }: { menus: MenuDef[] }) {
   );
 }
 
-function Dock() {
+/**
+ * Apre una pagina come un'app di macOS: la nuova pagina si ingrandisce partendo dall'icona del Dock,
+ * la vecchia svanisce. Usa le View Transitions del browser; senza supporto naviga e basta.
+ */
+function useDockNavigate() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (to: string, icon: HTMLElement) => {
+    const main = document.querySelector<HTMLElement>('.main');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (to === location.pathname) return;
+    if (!document.startViewTransition || !main || reduced) return navigate(to);
+    const m = main.getBoundingClientRect();
+    const i = icon.getBoundingClientRect();
+    document.documentElement.style.setProperty('--dock-origin', `${i.left + i.width / 2 - m.left}px ${i.top + i.height / 2 - m.top}px`);
+    document.startViewTransition(async () => {
+      flushSync(() => navigate(to));
+      // Aspetta (poco) che la pagina abbia contenuto, così non si ingrandisce una finestra vuota.
+      const until = performance.now() + 350;
+      while (main.childElementCount === 0 && performance.now() < until) await new Promise(requestAnimationFrame);
+    });
+  };
+}
+
+function Dock({ accounts }: { accounts: Account[] }) {
+  const go = useDockNavigate();
+  const open = (to: string) => (e: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    go(to, e.currentTarget.querySelector<HTMLElement>('.dock-icon') ?? e.currentTarget);
+  };
   return (
     <nav className="dock" aria-label="Dock">
       {SECTIONS.map((s) => (
-        <NavLink key={s.to} to={s.to} end={s.end} className="dock-item" title={s.label} aria-label={s.label}>
+        <NavLink key={s.to} to={s.to} end={s.end} className="dock-item" title={s.label} aria-label={s.label} onClick={open(s.to)}>
           <span className={`dock-icon dock-${s.icon}`}>
             <Icon name={s.icon} size={24} />
           </span>
         </NavLink>
       ))}
+      {accounts.length > 0 && <span className="dock-separator" aria-hidden />}
+      {accounts.map((a) => {
+        const label = a.name || a.handle || 'Account senza nome';
+        return (
+          <NavLink key={a.id} to={`/account/${a.id}`} className="dock-item" title={a.handle ? `${label} (${a.handle})` : label} aria-label={label} onClick={open(`/account/${a.id}`)}>
+            <Avatar account={a} className="dock-icon dock-account" />
+          </NavLink>
+        );
+      })}
     </nav>
   );
 }
