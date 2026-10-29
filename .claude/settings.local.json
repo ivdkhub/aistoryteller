@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed 's/.*\\\\.//')",
+      "Bash(grep -n -E '^\\(#|=+|-{3,}|[A-ZÀ-Ú0-9 _:\\\\-–—]{8,}$\\)' Bank_error_S1_copioni_e_prompt.txt)",
+      "Bash(cd *)",
+      "PowerShell(npm *)"
+    ]
+  }
+}

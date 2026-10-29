@@ -1,0 +1,14 @@
+creare un programma eseguibile nel browser locale che mi permetta di gestire il mio flusso di lavoro nella creazione di contenuti digitali per i miei profili Instagram. 
+
+non voglio nessun collegamento effettivo API con i social ma una dashboard mia per organizzare le mie idee. 
+
+Il programma deve gestire per ogni account social-Instagram che creo (posso creare un account "Instagram" all'interno del tool creare progetti all'interno di ogni account)
+
+quando creo il progetto voglio decidere tra: 
+
+- Progetto base 
+- Progetto con Personaggi 
+- AI Influencer 
+
+nel progetto voglio salvare i personaggi con la carta personaggio di ciascuno e tracciare anche eventuali prompt per immagine o video (se voglio) 
+procedi tu con il resto che ritieni utile sulla base del lavoro svolto sotto: C:\Spazio di lavoro\ivdk\Contenuti\Insta-series
