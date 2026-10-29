@@ -88,7 +88,7 @@ export function Home() {
           </ul>
           {unscheduled.length > 0 && (
             <p className="muted small">
-              {unscheduled.length} episodi in lavorazione non hanno ancora una data. <Link to="/calendario">Pianificali</Link>
+              {unscheduled.length === 1 ? '1 episodio in lavorazione non ha' : `${unscheduled.length} episodi in lavorazione non hanno`} ancora una data. <Link to="/calendario">Pianificali</Link>
             </p>
           )}
         </section>
@@ -132,7 +132,7 @@ export function Home() {
               <span className="muted small">{PROJECT_TYPE_LABEL[p.type]}</span>
               {ps.length > 0 && <Progress shots={ps} />}
               <span className="small">
-                {eps.length} {p.type === 'characters' ? 'episodi' : 'post'}
+                {eps.length} {p.type === 'characters' ? (eps.length === 1 ? 'episodio' : 'episodi') : 'post'}
                 {current && (
                   <>
                     {' · in lavorazione: '}

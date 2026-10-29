@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { api, useItems, watchChanges } from '../api.ts';
+import { api, useFetch, useItems, watchChanges } from '../api.ts';
 import { Area, Field, Modal, Select, Text } from './ui.tsx';
 import { AccountForm } from './forms.tsx';
 import { Icon, type IconName } from './Icon.tsx';
+import { ErrorBoundary } from './ErrorBoundary.tsx';
 import type { Account } from '../../shared/types.ts';
 
 const SECTIONS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
@@ -186,7 +187,9 @@ export function Layout() {
             </form>
           </header>
           <main className="main">
-            <Outlet />
+            <ErrorBoundary key={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
           </main>
         </div>
       </div>
@@ -216,6 +219,7 @@ export function Layout() {
               Lo studio locale per i tuoi contenuti Instagram: account, progetti, personaggi, prompt e produzione degli episodi.
               I dati restano su questo computer.
             </p>
+            <AboutDetails />
           </div>
         </Modal>
       )}
@@ -231,6 +235,18 @@ export function Layout() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function AboutDetails() {
+  const { data } = useFetch<{ version: string; dataDir: string }>('/config');
+  if (!data) return null;
+  return (
+    <p className="muted small">
+      Versione {data.version}
+      <br />
+      Archivio: {data.dataDir}
+    </p>
   );
 }
 

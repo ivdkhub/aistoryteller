@@ -8,7 +8,7 @@ import { Composer } from '../components/Composer.tsx';
 import { IdeasBoard } from '../components/IdeasBoard.tsx';
 import { Progress } from './Home.tsx';
 import { ProgressBar } from '../components/EpisodeProgress.tsx';
-import { formatDate } from '../util.ts';
+import { formatDate, plural } from '../util.ts';
 import {
   EPISODE_FORMAT_LABEL, EPISODE_STATUS_LABEL, PROJECT_STATUS_LABEL, PROJECT_TYPE_LABEL,
   type Brand, type Project, type ProjectStatus, type ProjectType, type StylePreset,
@@ -150,7 +150,7 @@ function Overview({ p, set }: { p: Project; set: (patch: Partial<Project>) => vo
                 setScan('Scansione…');
                 try {
                   const r = await request<{ updated: number }>(`/projects/${p.id}/scan`, { method: 'POST' });
-                  setScan(r.updated ? `${r.updated} inquadrature aggiornate.` : 'Nessun file nuovo.');
+                  setScan(r.updated ? `${plural(r.updated, 'inquadratura aggiornata', 'inquadrature aggiornate')}.` : 'Nessun file nuovo.');
                   bump();
                 } catch (e) {
                   setScan((e as Error).message);
@@ -213,7 +213,7 @@ function Characters({ project }: { project: Project }) {
             <div className="cast-img">{c.images[0] ? <Media path={c.images[0].path} /> : <span className="cast-initial">{c.name.slice(0, 1)}</span>}</div>
             <strong>{c.name}</strong>
             <span className="muted small">{[c.age, c.role].filter(Boolean).join(', ')}</span>
-            {c.images.length > 1 && <span className="small">{c.images.length - 1} varianti</span>}
+            {c.images.length > 1 && <span className="small">{plural(c.images.length - 1, 'variante', 'varianti')}</span>}
           </Link>
         ))}
       </div>

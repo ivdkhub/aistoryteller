@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bump, request, useItems } from '../api.ts';
+import { bump, request, useFetch, useItems } from '../api.ts';
 import { Browser, Field, Select } from '../components/ui.tsx';
+import { plural } from '../util.ts';
 
 interface Preview {
   title: string;
@@ -21,8 +22,70 @@ export function ImportPage() {
         <h1>Import e backup</h1>
       </header>
       <SeasonImport />
+      <Roots />
       <Backup />
     </div>
+  );
+}
+
+interface Root {
+  path: string;
+  exists: boolean;
+}
+
+/** Cartelle da cui l'app può mostrare immagini e video e cercare i file delle inquadrature. */
+function Roots() {
+  const { data } = useFetch<{ allowedRoots: Root[] }>('/config');
+  const [roots, setRoots] = useState<Root[] | null>(null);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const list = roots ?? data?.allowedRoots ?? [];
+
+  const save = async (paths: string[]) => {
+    setError('');
+    try {
+      const r = await request<{ allowedRoots: Root[] }>('/config/roots', { method: 'PUT', body: JSON.stringify({ allowedRoots: paths }) });
+      setRoots(r.allowedRoots);
+      bump();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <section className="panel stack">
+      <h2>Cartelle dei contenuti</h2>
+      <p className="muted">
+        L'app legge immagini, video e documenti solo da queste cartelle (e da quelle che contengono). Aggiungi quella in cui
+        tieni i tuoi progetti, ad esempio <code>C:\Utenti\nome\Documenti\Contenuti</code>.
+      </p>
+      <ul className="list">
+        {list.map((r) => (
+          <li key={r.path} className="list-link">
+            <span className="grow mono">{r.path}</span>
+            {!r.exists && <span className="error small">cartella non trovata</span>}
+            <button className="btn btn-small btn-ghost btn-danger-text" disabled={list.length === 1} onClick={() => save(list.filter((x) => x.path !== r.path).map((x) => x.path))}>
+              Rimuovi
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!draft.trim()) return;
+          void save([...list.map((x) => x.path), draft.trim()]);
+          setDraft('');
+        }}
+      >
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Percorso della cartella da aggiungere" aria-label="Cartella da aggiungere" />
+        <button className="btn" type="submit" disabled={!draft.trim()}>
+          Aggiungi cartella
+        </button>
+      </form>
+      {error && <p className="error">{error}</p>}
+    </section>
   );
 }
 
@@ -118,7 +181,7 @@ function SeasonImport() {
                   <li key={c.name}>
                     {c.name}{' '}
                     <span className="muted small">
-                      {c.voiceOnly ? 'solo voce' : c.image ? `scheda trovata${c.variants ? ` + ${c.variants} varianti` : ''}` : 'scheda non trovata'}
+                      {c.voiceOnly ? 'solo voce' : c.image ? `scheda trovata${c.variants ? ` + ${plural(c.variants, 'variante', 'varianti')}` : ''}` : 'scheda non trovata'}
                       {c.exists && ', aggiorna'}
                     </span>
                   </li>

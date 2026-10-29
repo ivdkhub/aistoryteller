@@ -1,3 +1,8 @@
+/** "1 variante" / "3 varianti". */
+export function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 export function formatDate(iso: string, withTime = true) {
   if (!iso) return '';
   const d = new Date(iso);

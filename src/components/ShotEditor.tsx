@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, baseName, useAutosave, useItems } from '../api.ts';
 import { Area, CopyButton, DeleteButton, Field, FilePicker, Media, Modal, SaveBadge, Select, Text } from './ui.tsx';
 import { Composer } from './Composer.tsx';
+import { plural } from '../util.ts';
 import { PromptList } from './PromptList.tsx';
 import { SHOT_STATUS_LABEL, type AnimPriority, type Shot, type ShotStatus } from '../../shared/types.ts';
 
@@ -86,7 +87,7 @@ export function ShotEditor({ shot, onClose, onPrev, onNext }: Props) {
         </div>
         {s.alternates.length > 0 && (
           <details className="alternates">
-            <summary>{s.alternates.length} varianti e scarti su disco</summary>
+            <summary>{plural(s.alternates.length, 'variante o scarto', 'varianti e scarti')} su disco</summary>
             <ul>
               {s.alternates.map((a) => (
                 <li key={a}>

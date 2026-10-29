@@ -22,17 +22,17 @@ const server = new McpServer({ name: 'ai-story-teller', version: '1.0.0' });
 const kind = z.enum(KINDS as [Kind, ...Kind[]]).describe(
   'Tipo di elemento: account, project (progetto), character (personaggio), style (stile di prompt), episode (episodio o post), shot (inquadratura), prompt (storico prompt), idea.',
 );
-const anyObject = z.record(z.any());
+const anyObject = z.record(z.string(), z.any());
 
 function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 1) }] };
 }
 
 /** Avvolge ogni strumento: gli errori tornano a Claude come testo leggibile. */
-function tool<S extends z.ZodRawShape>(name: string, description: string, shape: S, run: (args: z.objectOutputType<S, z.ZodTypeAny>) => unknown) {
+function tool<S extends z.ZodRawShape>(name: string, description: string, shape: S, run: (args: z.infer<z.ZodObject<S>>) => unknown) {
   const callback = async (args: unknown) => {
     try {
-      return ok(await run(args as z.objectOutputType<S, z.ZodTypeAny>));
+      return ok(await run(args as z.infer<z.ZodObject<S>>));
     } catch (err) {
       return { content: [{ type: 'text' as const, text: `Errore: ${(err as Error).message}` }], isError: true };
     }

@@ -11,16 +11,27 @@ import { updateShot } from './service.ts';
 import { applyScan, scanProject } from './scanner.ts';
 import { applySeason, previewSeason, type SeasonImportOptions } from './importers/applySeason.ts';
 import { episodeMarkdown, timelineCsv } from './exporters.ts';
+import { appVersion, loadConfig, ROOT, saveAllowedRoots } from './config.ts';
 import type { Item, Kind } from '../shared/types.ts';
 
-const ROOT = path.join(import.meta.dirname, '..');
-const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) as { port: number; allowedRoots: string[] };
+const config = loadConfig();
 
 db.openDb();
 seed();
 
 const app = Fastify({ logger: { level: 'warn' }, bodyLimit: 50 * 1024 * 1024 });
 await app.register(multipart, { limits: { fileSize: 500 * 1024 * 1024 } });
+
+// Solo la pagina dell'app può usare le API: niente richieste da altri siti aperti nel browser
+// (Origin estraneo) né da nomi host diversi da localhost (DNS rebinding).
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+app.addHook('onRequest', async (req, reply) => {
+  const host = (req.headers.host ?? '').replace(/:\d+$/, '').toLowerCase();
+  const origin = req.headers.origin;
+  if (!LOCAL_HOSTS.has(host) || (origin && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin))) {
+    return reply.status(403).send({ error: 'Richiesta non consentita: AI Story Teller accetta solo richieste da questo computer.' });
+  }
+});
 
 const MIME: Record<string, string> = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
@@ -38,7 +49,7 @@ function resolveFile(p: string): string {
   const full = p.startsWith('media/') ? path.join(db.DATA_DIR, p) : path.resolve(p);
   const roots = [db.MEDIA_DIR, ...config.allowedRoots].map((r) => path.resolve(r).toLowerCase() + path.sep);
   if (!roots.some((r) => (full.toLowerCase() + path.sep).startsWith(r))) {
-    throw Object.assign(new Error('Percorso fuori dalle cartelle consentite (config.json → allowedRoots).'), { statusCode: 403 });
+    throw Object.assign(new Error('Percorso fuori dalle cartelle consentite: aggiungila in Import e backup → Cartelle dei contenuti.'), { statusCode: 403 });
   }
   return full;
 }
@@ -155,7 +166,17 @@ app.get<{ Params: { id: string; format: string } }>('/api/episodes/:id/export.:f
   return episodeMarkdown(ep);
 });
 
-app.get('/api/config', () => ({ allowedRoots: config.allowedRoots, dataDir: db.DATA_DIR }));
+app.get('/api/config', () => ({
+  version: appVersion(),
+  dataDir: db.DATA_DIR,
+  allowedRoots: config.allowedRoots.map((p) => ({ path: p, exists: fs.existsSync(p) })),
+}));
+
+app.put<{ Body: { allowedRoots: string[] } }>('/api/config/roots', (req) => {
+  if (!Array.isArray(req.body?.allowedRoots)) throw Object.assign(new Error('Elenco di cartelle non valido'), { statusCode: 400 });
+  config.allowedRoots = saveAllowedRoots(req.body.allowedRoots);
+  return { allowedRoots: config.allowedRoots.map((p) => ({ path: p, exists: fs.existsSync(p) })) };
+});
 app.get('/api/changes', () => ({ stamp: db.stamp() }));
 
 // --- Interfaccia -----------------------------------------------------------
@@ -166,6 +187,10 @@ if (fs.existsSync(DIST)) {
     if (req.url.startsWith('/api/')) return reply.status(404).send({ error: 'Non trovato' });
     return reply.sendFile('index.html');
   });
+} else {
+  app.setNotFoundHandler((_req, reply) =>
+    reply.status(503).type('text/plain; charset=utf-8').send('Interfaccia non ancora compilata: avvia AI Story Teller con start.bat (oppure esegui "npm run build").'),
+  );
 }
 
 /** Al primo avvio: stili generici disponibili in ogni progetto. */
@@ -189,7 +214,22 @@ function seed() {
   });
 }
 
-const port = Number(process.env.PORT ?? config.port);
-await app.listen({ port, host: '127.0.0.1' });
-console.log(`AI Story Teller: http://localhost:${port}`);
-if (process.env.OPEN_BROWSER === '1') exec(`start "" http://localhost:${port}`);
+const port = config.port;
+const url = `http://localhost:${port}`;
+const openBrowser = () => process.env.OPEN_BROWSER === '1' && exec(`start "" ${url}`);
+try {
+  await app.listen({ port, host: '127.0.0.1' });
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw err;
+  // La porta è occupata: se è già AI Story Teller basta aprire il browser.
+  const running = await fetch(`${url}/api/config`).then((r) => r.ok, () => false);
+  if (running) {
+    console.log(`AI Story Teller è già aperto: ${url}`);
+    openBrowser();
+    process.exit(0);
+  }
+  console.error(`La porta ${port} è usata da un altro programma. Scegli un'altra porta in config.local.json, es. { "port": 5179 }.`);
+  process.exit(1);
+}
+console.log(`AI Story Teller ${appVersion()}: ${url}`);
+openBrowser();

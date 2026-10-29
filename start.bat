@@ -1,18 +1,17 @@
 @echo off
+chcp 65001 >nul
 cd /d "%~dp0"
 title AI Story Teller
-if not exist node_modules (
-  echo Installo le dipendenze...
-  call npm install || goto :error
+where node >nul 2>nul
+if errorlevel 1 (
+  echo Node.js non è installato. Scarica la versione LTS da https://nodejs.org e riapri start.bat.
+  pause
+  exit /b 1
 )
-if not exist dist\index.html (
-  echo Preparo l'interfaccia...
-  call npm run build || goto :error
+echo Avvio di AI Story Teller (chiudi questa finestra per fermarlo)...
+node scripts\start.mjs
+if errorlevel 1 (
+  echo.
+  echo Si è verificato un errore. Premi un tasto per chiudere.
+  pause >nul
 )
-echo Avvio di AI Story Teller su http://localhost:5178 (chiudi questa finestra per fermarlo)
-set OPEN_BROWSER=1
-node server\index.ts
-goto :eof
-:error
-echo Si e' verificato un errore. Premi un tasto per chiudere.
-pause >nul
