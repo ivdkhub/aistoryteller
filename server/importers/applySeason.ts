@@ -136,7 +136,12 @@ export function applySeason(opts: SeasonImportOptions): { projectId: string; acc
       bible: season.bible,
       folder,
     };
-    const project = existing ? db.update('project', existing.id, projectData)! : db.create('project', projectData);
+    // Variabili di stato: quelle del documento aggiornano quelle con lo stesso nome, le altre restano.
+    const stateDefs = [
+      ...(existing?.stateDefs ?? []).filter((d) => !season.stateDefs.some((s) => s.name === d.name)),
+      ...season.stateDefs,
+    ];
+    const project = existing ? db.update('project', existing.id, { ...projectData, stateDefs })! : db.create('project', { ...projectData, stateDefs });
     const projectId = project.id;
 
     // Stili
@@ -194,6 +199,15 @@ export function applySeason(opts: SeasonImportOptions): { projectId: string; acc
       satelliteId = existingSat ? db.update('account', existingSat.id, satData)!.id : db.create('account', satData).id;
     }
 
+    // Effetti dei voti sulle variabili ("voto 2 MOVE +29 / FREEZE 0"), fusi con quelli già impostati.
+    const voteEffects = (episode: number, current: Record<string, Record<string, number>>) => {
+      const out = structuredClone(current);
+      for (const v of season.voteEffects.filter((x) => x.episode === episode)) {
+        for (const [opt, delta] of Object.entries(v.effects)) out[opt] = { ...(out[opt] ?? {}), [v.variable]: delta };
+      }
+      return out;
+    };
+
     // Episodi e inquadrature
     const existingEps = db.list('episode', { projectId });
     const existingShots = db.list('shot', { projectId });
@@ -208,7 +222,12 @@ export function applySeason(opts: SeasonImportOptions): { projectId: string; acc
         format: e.format,
         info: e.info,
         voices: e.voices,
-        vote: { ...e.vote, winner: e.vote.winner || current?.vote.winner || '', percent: e.vote.percent || current?.vote.percent || '' },
+        vote: {
+          ...e.vote,
+          winner: e.vote.winner || current?.vote.winner || '',
+          percent: e.vote.percent || current?.vote.percent || '',
+          effects: voteEffects(e.satellite ? -1 : e.number, current?.vote.effects ?? {}),
+        },
         branches: e.branches,
         stateVars: { ...(current?.stateVars ?? {}), ...e.stateVars },
         script: e.script,

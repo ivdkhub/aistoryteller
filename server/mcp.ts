@@ -12,6 +12,10 @@ import { applySeason, previewSeason } from './importers/applySeason.ts';
 import { episodeMarkdown, timelineCsv } from './exporters.ts';
 import { createFolders, overview, planFolders, projectTree, upsertStructure, type StructureSpec } from './structure.ts';
 import { episodeProgress } from '../shared/progress.ts';
+import { checkShot } from '../shared/consistency.ts';
+import { storyStates } from '../shared/story.ts';
+import { generationQueue } from '../shared/queue.ts';
+import { defaultPackDir, elevenLabsScript, remotionPack, remotionTimeline } from './production.ts';
 import { attachmentsFor, buildImagePrompt, buildVideoPrompt } from '../shared/compose.ts';
 import { defaults, KINDS, type Item, type Kind } from '../shared/types.ts';
 
@@ -67,6 +71,9 @@ tool(
         'episode.status': ['idea', 'writing', 'production', 'editing', 'ready', 'published'],
         'episode.publishDate': 'YYYY-MM-DDTHH:mm (ora locale)',
         'episode.checklist': 'chiavi delle tappe spuntate a mano: script, prompts, images, videos, audio, edit, revisions, caption',
+        'project.stateDefs': 'variabili della storia: [{"name":"TRACE","start":12,"startEpisode":2,"min":5,"max":95,"unit":"%"}]',
+        'episode.vote.effects': 'effetto di ogni opzione sulle variabili: {"MOVE":{"TRACE":29},"FREEZE":{"TRACE":0}}',
+        'episode.linkedEpisodeId': 'per i post satellite: id dell\'episodio principale a cui sono legati',
         'shot.status': ['todo', 'image', 'video', 'edited', 'discarded'],
         'shot.animPriority': ['', 'alta', 'media', 'bassa'],
         'style.target': ['image', 'video'],
@@ -270,11 +277,11 @@ tool(
 tool(
   'esporta_episodio',
   'Esporta un episodio come markdown (scheda, copione, inquadrature con prompt, nel formato del documento di stagione) oppure come CSV della timeline di montaggio. Con filePath lo scrive anche su disco.',
-  { episodeId: z.string(), formato: z.enum(['markdown', 'csv']).optional(), filePath: z.string().optional() },
+  { episodeId: z.string(), formato: z.enum(['markdown', 'csv', 'elevenlabs']).optional(), filePath: z.string().optional() },
   ({ episodeId, formato, filePath }) => {
     const e = db.get('episode', episodeId);
     if (!e) throw new Error(`Episodio non trovato: ${episodeId}`);
-    const text = formato === 'csv' ? timelineCsv(e) : episodeMarkdown(e);
+    const text = formato === 'csv' ? timelineCsv(e) : formato === 'elevenlabs' ? elevenLabsScript(e) : episodeMarkdown(e);
     if (filePath) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, text, 'utf8');
@@ -299,6 +306,78 @@ tool(
   'Crea sul disco le cartelle del progetto e le schede .md (progetto, personaggi, episodi) come in piano_cartelle; i file esistenti restano, salvo sovrascrivi=true. Collega la cartella al progetto se non ne aveva una, così lo scanner può abbinare i file generati.',
   { projectId: z.string(), radice: z.string(), sovrascrivi: z.boolean().optional(), sottocartelle: z.array(z.string()).optional() },
   ({ projectId, radice, sovrascrivi, sottocartelle }) => createFolders(projectId, radice, { overwrite: sovrascrivi, subfolders: sottocartelle }),
+);
+
+tool(
+  'controlla_coerenza',
+  'Controlla la coerenza dei personaggi nelle inquadrature di un episodio o di un progetto: regole di continuità violate (es. volto mostrato), personaggi nei riferimenti ma non segnati, prompt che riprendono poco la descrizione fissa. Gli avvisi "warn" vanno ricontrollati, gli "info" sono note.',
+  { episodeId: z.string().optional(), projectId: z.string().optional(), soloAvvisi: z.boolean().optional() },
+  ({ episodeId, projectId, soloAvvisi }) => {
+    const episode = episodeId ? db.get('episode', episodeId) : undefined;
+    const pid = episode?.projectId ?? projectId;
+    if (!pid) throw new Error('Indica episodeId o projectId.');
+    const characters = db.list('character', { projectId: pid });
+    const shots = episodeId ? db.list('shot', { episodeId }) : db.list('shot', { projectId: pid });
+    return shots
+      .filter((s) => s.status !== 'discarded')
+      .map((s) => ({ id: s.id, code: s.code, issues: checkShot(s, characters).filter((i) => !soloAvvisi || i.level === 'warn') }))
+      .filter((r) => r.issues.length);
+  },
+);
+
+tool(
+  'stato_storia',
+  'Linea della storia di un progetto: per ogni episodio i valori delle variabili (es. TRACE) all\'inizio, le opzioni di voto con il loro effetto e il valore che ne risulta, il vincitore. Le variabili si definiscono in project.stateDefs, gli effetti in episode.vote.effects (modificabili con modifica).',
+  { projectId: z.string() },
+  ({ projectId }) => {
+    const project = db.get('project', projectId);
+    if (!project) throw new Error(`Progetto non trovato: ${projectId}`);
+    const main = db.list('episode', { projectId }).filter((e) => !e.publishAccountId);
+    return { variabili: project.stateDefs, episodi: storyStates(project.stateDefs ?? [], main) };
+  },
+);
+
+tool(
+  'lista_generazione',
+  'Inquadrature che aspettano un\'immagine (tipo "image") o un video (tipo "video"), nell\'ordine di produzione, con prompt, riferimenti da allegare e avvisi di coerenza.',
+  { projectId: z.string(), tipo: z.enum(['image', 'video']).optional(), episodeId: z.string().optional(), limite: z.number().optional() },
+  ({ projectId, tipo, episodeId, limite }) => {
+    const kind = tipo ?? 'image';
+    const characters = db.list('character', { projectId });
+    const queue = generationQueue(db.list('shot', { projectId }), db.list('episode', { projectId }), kind).filter((s) => !episodeId || s.episodeId === episodeId);
+    return {
+      totale: queue.length,
+      inquadrature: queue.slice(0, limite ?? 20).map((s) => ({
+        id: s.id,
+        code: s.code,
+        titolo: s.title,
+        prompt: kind === 'image' ? s.imagePrompt : s.videoPrompt,
+        movimento: kind === 'video' ? s.animation : undefined,
+        priorita: s.animPriority || undefined,
+        allegati:
+          kind === 'image'
+            ? s.characterIds.map((id) => characters.find((c) => c.id === id)).filter(Boolean).map((c) => c!.images[0]?.path ?? `${c!.name} (senza scheda)`)
+            : [s.imageFile].filter(Boolean),
+        riferimenti: s.refs || undefined,
+        avvisi: checkShot(s, characters).filter((i) => i.level === 'warn').map((i) => i.text),
+      })),
+    };
+  },
+);
+
+tool(
+  'pacchetto_remotion',
+  'Crea il pacchetto Remotion di un episodio: copia immagini e video in public/img e public/vid (nomi S01.png, S05_VID.mp4…), genera src/data/timeline.generated.ts con tempi stimati dal copione e il copione per ElevenLabs. Senza cartella usa <cartella progetto>\\<EPxx>\\remotion-pack-<EPxx>. Con anteprima=true mostra solo la sequenza.',
+  { episodeId: z.string(), cartella: z.string().optional(), sovrascrivi: z.boolean().optional(), anteprima: z.boolean().optional() },
+  ({ episodeId, cartella, sovrascrivi, anteprima }) => {
+    const e = db.get('episode', episodeId);
+    if (!e) throw new Error(`Episodio non trovato: ${episodeId}`);
+    if (anteprima) {
+      const t = remotionTimeline(e);
+      return { cartella: cartella ?? defaultPackDir(e), durata: t.total, senzaFile: t.skipped, inquadrature: t.shots.map(({ source, ...s }) => ({ ...s, file: source })) };
+    }
+    return remotionPack(e, cartella ?? defaultPackDir(e), { overwrite: sovrascrivi });
+  },
 );
 
 tool('esporta_backup', 'Scrive un backup completo dell\'archivio in JSON nel percorso indicato.', { filePath: z.string() }, ({ filePath }) => {

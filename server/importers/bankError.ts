@@ -69,6 +69,33 @@ export interface ParsedSeason {
   continuityRules: string[];
   episodes: ParsedEpisode[];
   satellite: { handle: string; altHandle: string; intro: string } | null;
+  /** Variabili di stato (es. TRACE) con gli effetti dei voti per episodio. */
+  stateDefs: { name: string; start: number; startEpisode: number; min: number | null; max: number | null; unit: string }[];
+  voteEffects: { episode: number; variable: string; effects: Record<string, number> }[];
+}
+
+/**
+ * "TRACE (TRACCIA %) — ... Parte dal 12% (ep. 2), min 5%, max 95%:
+ *    voto 2 MOVE +29 / FREEZE 0 · voto 3 DEAL +25 / RUN +5 ..."
+ */
+function parseStateRules(lines: string[]): Pick<ParsedSeason, 'stateDefs' | 'voteEffects'> {
+  const paragraphs = lines.join('\n').split(/\n\s*\n/).map((p) => p.replace(/\s+/g, ' ').trim());
+  const stateDefs: ParsedSeason['stateDefs'] = [];
+  const voteEffects: ParsedSeason['voteEffects'] = [];
+  for (const p of paragraphs) {
+    const def = p.match(/^([A-Z][A-Z ]*?)\s*(?:\([^)]*\))?\s*—.*?Parte da(?:l)?\s*(-?\d+)\s*(%?)\s*\(ep\.\s*(\d+)\)(?:,\s*min\s*(-?\d+)\s*%?)?(?:,\s*max\s*(-?\d+)\s*%?)?/);
+    if (!def) continue;
+    const name = def[1].trim();
+    stateDefs.push({
+      name, start: Number(def[2]), unit: def[3], startEpisode: Number(def[4]),
+      min: def[5] !== undefined ? Number(def[5]) : null, max: def[6] !== undefined ? Number(def[6]) : null,
+    });
+    const num = (s: string) => Number(s.replace('−', '-').replace('+', ''));
+    for (const m of p.matchAll(/voto\s+(\d+)\s+([A-Z][A-Z ]*?)\s+([+−-]?\d+)\s*\/\s*([A-Z][A-Z ]*?)\s+([+−-]?\d+)/g)) {
+      voteEffects.push({ episode: Number(m[1]), variable: name, effects: { [m[2].trim()]: num(m[3]), [m[4].trim()]: num(m[5]) } });
+    }
+  }
+  return { stateDefs, voteEffects };
 }
 
 const BANNER = /^(={10,}|#{10,})\s*$/;
@@ -449,7 +476,7 @@ export function parseSeason(text: string): ParsedSeason {
   const season: ParsedSeason = {
     title: head[0]?.trim() ?? 'Serie importata',
     version: head.find((l) => /^Versione/i.test(l.trim()))?.trim() ?? '',
-    styles: [], characters: [], bible: '', continuityRules: [], episodes: [], satellite: null,
+    styles: [], characters: [], bible: '', continuityRules: [], episodes: [], satellite: null, stateDefs: [], voteEffects: [],
   };
   const bible: string[] = [];
   let voices = new Map<string, string>();
@@ -468,6 +495,7 @@ export function parseSeason(text: string): ParsedSeason {
     } else {
       for (const [k, v] of parseArcs(sec.lines)) arcs.set(k, v);
       if (t.startsWith('COME LEGGERE')) season.continuityRules = bulletRules(sec.lines);
+      if (t.startsWith('NUMERI')) Object.assign(season, parseStateRules(sec.lines));
       bible.push(`## ${sec.title}\n\n${trimBlock(sec.lines)}`);
     }
   }

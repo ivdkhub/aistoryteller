@@ -222,7 +222,95 @@ if (SEASON && fs.existsSync(SEASON)) {
     await page.locator('.project-card').first().waitFor();
     await shot('07-panoramica');
   });
+
+  const api = (url, opts) => fetch(`${BASE}/api${url}`, opts).then((r) => r.json());
+  const project = (await api('/items/project')).find((p) => p.title.startsWith('BANK'));
+  const eps = project ? await api(`/items/episode?projectId=${project.id}`) : [];
+  const ep2 = eps.find((e) => e.code === 'EP02');
+
+  await step('Voti e rami: TRACE si propaga con il vincitore', async () => {
+    await page.goto(`${BASE}/progetto/${project.id}/voti`);
+    const node = (code) => page.locator('.story-node', { has: page.locator('.code', { hasText: new RegExp(`^${code}$`) }) });
+    await node('EP02').locator('.state-chip', { hasText: 'TRACE 12%' }).waitFor();
+    await node('EP02').locator('.vote-option', { hasText: 'MOVE' }).click();
+    await node('EP03').locator('.state-chip', { hasText: 'TRACE 41%' }).waitFor();
+    await shot('10-voti-e-rami');
+    await node('EP02').locator('.vote-option', { hasText: 'MOVE' }).click();
+    await node('EP03').locator('.state-chip', { hasText: 'TRACE ?' }).waitFor();
+  });
+
+  await step('Lista di generazione: copia e passa alla successiva', async () => {
+    await page.goto(`${BASE}/progetto/${project.id}/generare`);
+    await page.locator('.queue-card.active').waitFor();
+    assert((await page.locator('.queue-card').count()) > 20, 'poche inquadrature in lista');
+    const first = await page.locator('.queue-card.active .code').innerText();
+    await page.getByRole('button', { name: /^Copia il prompt di/ }).click();
+    await page.waitForTimeout(300);
+    assert((await page.locator('.queue-card.active .code').innerText()) !== first, 'la lista non avanza');
+    await page.getByRole('button', { name: /^Video da animare/ }).click();
+    await page.locator('.queue-card').first().waitFor();
+    await shot('11-da-generare');
+  });
+
+  await step('Galleria delle generazioni', async () => {
+    const shots = await api(`/items/shot?projectId=${project.id}`);
+    const withAlt = shots.find((s) => s.alternates.length >= 1 && s.imageFile);
+    assert(withAlt, 'nessuna inquadratura con varianti');
+    await page.goto(`${BASE}/episodio/${withAlt.episodeId}?shot=${withAlt.id}`);
+    await page.locator('.gallery-strip').waitFor();
+    await page.locator('.gallery-strip').getByRole('button', { name: 'Confronta' }).click();
+    await page.locator('.gallery-card').first().waitFor();
+    assert((await page.locator('.gallery-card').count()) >= 1, 'galleria vuota');
+    await shot('12-galleria');
+    await page.keyboard.press('Escape');
+  });
+
+  await step('Copione per ElevenLabs e pacchetto Remotion', async () => {
+    const txt = await fetch(`${BASE}/api/episodes/${ep2.id}/export.elevenlabs`).then((r) => r.text());
+    assert(txt.includes('BLOCCO A') && txt.includes('--- NICO'), 'copione ElevenLabs incompleto');
+    const pack = await api(`/episodes/${ep2.id}/remotion`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dir: path.join(DATA, 'pack-ep02') }),
+    });
+    assert(pack.copied > 20 && fs.existsSync(path.join(DATA, 'pack-ep02', 'src', 'data', 'timeline.generated.ts')), `pacchetto: ${JSON.stringify(pack).slice(0, 200)}`);
+    const outside = await fetch(`${BASE}/api/episodes/${ep2.id}/remotion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir: 'C:\\Windows\\Temp\\pack' }) });
+    assert(outside.status === 403, `pacchetto fuori dalle cartelle consentite non bloccato (${outside.status})`);
+    await page.goto(`${BASE}/episodio/${ep2.id}/copione`);
+    await page.locator('.remotion-panel summary').click();
+    await page.getByRole('button', { name: 'Crea il pacchetto' }).waitFor();
+  });
 }
+
+await step('Controllo di coerenza: avviso su una regola violata', async () => {
+  const api = (url, opts) => fetch(`${BASE}/api${url}`, { headers: { 'content-type': 'application/json' }, ...opts }).then((r) => r.json());
+  const anna = (await api('/items/character')).find((c) => c.name === 'ANNA');
+  await api(`/items/character/${anna.id}`, { method: 'PATCH', body: JSON.stringify({ continuityRules: ['non mostra mai il volto'] }) });
+  const shotItem = (await api(`/items/shot?projectId=${anna.projectId}`))[0];
+  await api(`/items/shot/${shotItem.id}`, { method: 'PATCH', body: JSON.stringify({ characterIds: [anna.id], imagePrompt: 'She turns to the camera, her face lit by the screen.' }) });
+  await page.goto(`${BASE}/episodio/${shotItem.episodeId}?shot=${shotItem.id}`);
+  await page.locator('.frame-warn').first().waitFor();
+  await page.locator('.issue-warn').first().waitFor();
+  await page.getByRole('button', { name: /da ricontrollare/ }).click();
+  assert((await page.locator('.frame').count()) === 1, 'il filtro "da ricontrollare" non filtra');
+  await shot('13-coerenza');
+});
+
+await step('Calendario settimanale: trascina su giorno e ora', async () => {
+  await page.goto(`${BASE}/calendario`);
+  await page.getByRole('button', { name: 'Settimana' }).click();
+  await page.locator('.week').waitFor();
+  const item = page.locator('.cal-unscheduled .cal-item').first();
+  const title = await item.innerText();
+  const target = page.locator('.week-cell').nth(7 * 5 + 2); // terza colonna, riga delle 10:00 (dopo "senza ora" e 6-9)
+  await item.dragTo(target);
+  await page.waitForTimeout(800);
+  const eps = await fetch(`${BASE}/api/items/episode`).then((r) => r.json());
+  const moved = eps.find((e) => title.includes(e.title) && e.publishDate);
+  assert(moved && moved.publishDate.endsWith('T10:00'), `data non impostata: ${moved?.publishDate}`);
+  await page.locator('.week-cell .cal-item').first().waitFor();
+  await shot('14-settimana');
+});
 
 await step('Cartelle dei contenuti', async () => {
   await page.goto(`${BASE}/import`);

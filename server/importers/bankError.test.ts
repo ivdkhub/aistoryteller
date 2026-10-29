@@ -116,6 +116,11 @@ describe.runIf(fs.existsSync(REAL))('parseSeason (documento reale Bank Error)', 
     expect(s.episodes.filter((e) => e.satellite).length).toBeGreaterThanOrEqual(6);
   });
 
+  it('legge la variabile TRACE e gli effetti dei voti', () => {
+    expect(s.stateDefs).toEqual([{ name: 'TRACE', start: 12, startEpisode: 2, min: 5, max: 95, unit: '%' }]);
+    expect(s.voteEffects.find((v) => v.episode === 6)?.effects).toEqual({ PLAY: -15, GHOST: 10 });
+  });
+
   it('EP02 ha inquadrature con prompt non vuoti', () => {
     const ep2 = s.episodes.find((e) => e.code === 'EP02')!;
     expect(ep2.shots.length).toBeGreaterThan(20);

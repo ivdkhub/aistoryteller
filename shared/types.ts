@@ -40,8 +40,20 @@ export interface Brand {
   hashtags: string;
 }
 
+/** Variabile che cambia con i voti del pubblico (es. TRACE). */
+export interface StateDef {
+  name: string;
+  start: number;
+  /** Episodio da cui la variabile esiste. */
+  startEpisode: number;
+  min: number | null;
+  max: number | null;
+  unit: string;
+}
+
 export interface Project extends Base {
   kind: 'project';
+  stateDefs: StateDef[];
   accountId: string;
   title: string;
   type: ProjectType;
@@ -122,6 +134,8 @@ export interface Vote {
   winner: string;
   percent: string;
   notes: string;
+  /** Effetto di ogni opzione sulle variabili di stato: { MOVE: { TRACE: 29 } }. */
+  effects: Record<string, Record<string, number>>;
 }
 
 export interface Episode extends Base {
@@ -240,7 +254,7 @@ const DEFAULTS: { [K in Kind]: Draft<K> } = {
     parentAccountId: '', linkedCharacterId: '',
   },
   project: {
-    accountId: '', title: '', type: 'base', status: 'idea', logline: '', bible: '', folder: '', notes: '',
+    accountId: '', title: '', type: 'base', status: 'idea', logline: '', bible: '', folder: '', notes: '', stateDefs: [],
     brand: { persona: '', toneOfVoice: '', values: '', pillars: '', donts: '', palette: '', outfits: '', hashtags: '' },
   },
   character: {
@@ -252,7 +266,7 @@ const DEFAULTS: { [K in Kind]: Draft<K> } = {
   episode: {
     accountId: '', projectId: '', publishAccountId: '', code: '', number: 0, title: '', format: 'reel', status: 'idea',
     duration: '', publishDate: '', info: '', voices: '', caption: '', hashtags: '', cta: '',
-    vote: { options: [], winner: '', percent: '', notes: '' }, branches: [], stateVars: {}, script: '',
+    vote: { options: [], winner: '', percent: '', notes: '', effects: {} }, branches: [], stateVars: {}, script: '',
     revisions: [], metrics: { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 }, linkedEpisodeId: '', checklist: {}, notes: '',
   },
   shot: {

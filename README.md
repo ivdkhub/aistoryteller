@@ -30,6 +30,18 @@ già aperta, `start.bat` apre solo il browser. Per fermarla chiudi la finestra n
 - **Copione e mappa di montaggio**, con export `timeline.csv` e dell'episodio in markdown.
 - **Calendario editoriale** (trascina per pianificare), **idee** in bacheca (Ctrl K ovunque per annotarne una),
   **ricerca** globale, **metriche** inserite a mano.
+- **Galleria delle generazioni**: per ogni inquadratura, principale, varianti e scarti affiancati; un clic per
+  scegliere quella da usare.
+- **Controllo di coerenza**: avvisa se un prompt viola una regola di continuità (es. "non mostra mai il volto"),
+  se un personaggio è tra i riferimenti ma non segnato in scena, o se il prompt riprende poco la sua descrizione.
+- **Voti e rami**: variabili della storia (es. TRACE) con valore iniziale, minimo e massimo; ogni opzione di voto
+  ha i suoi effetti e i valori si propagano episodio per episodio seguendo i vincitori, con le proiezioni dei rami.
+- **Da generare**: le inquadrature che aspettano immagine o video, con prompt e riferimenti pronti da copiare uno
+  dopo l'altro e caricamento del risultato.
+- **Copione per ElevenLabs**: voci, prompt di Voice Design, blocchi da generare e battute per voce.
+- **Pacchetto Remotion**: copia immagini e video in `public/img` e `public/vid` e genera
+  `src/data/timeline.generated.ts` con tempi stimati, da riallineare ai sottotitoli.
+- **Calendario** mensile e settimanale con orari; i post satellite mostrano l'episodio a cui sono legati.
 - **Import di una serie** da un documento di stagione (es. `Bank_error_S1_copioni_e_prompt.txt`) e **scanner**
   che collega i file `EPxx_Syy.png` / `EPxx_Syy_VID.mp4` alle inquadrature.
 
@@ -68,7 +80,8 @@ Aperto in questa cartella, Claude Code lo trova anche da `.mcp.json`.
 Strumenti: `panoramica`, `schema_campi`, `albero_progetto`, `elenca`, `leggi` (anche per codice, es. `EP02_S07`),
 `cerca`, `avanzamento_episodio`, `crea`, `modifica`, `elimina`, `crea_struttura` (un progetto intero in un colpo
 solo, rilanciabile senza doppioni), `componi_prompt`, `importa_serie`, `scansiona_cartella`, `esporta_episodio`,
-`piano_cartelle`, `crea_cartelle`, `esporta_backup`.
+`piano_cartelle`, `crea_cartelle`, `controlla_coerenza`, `stato_storia`, `lista_generazione`, `pacchetto_remotion`,
+`esporta_backup` (e `esporta_episodio` in markdown, CSV o testo per ElevenLabs).
 
 Comandi pronti in Claude Code:
 

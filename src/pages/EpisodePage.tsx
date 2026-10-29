@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, useAutosave, useItem, useItems } from '../api.ts';
+import { api, request, useAutosave, useFetch, useItem, useItems } from '../api.ts';
 import { Area, CopyButton, DeleteButton, Empty, Field, Media, SaveBadge, Select, Tabs, Text } from '../components/ui.tsx';
 import { ShotEditor } from '../components/ShotEditor.tsx';
 import { PromptList } from '../components/PromptList.tsx';
 import { EpisodeProgress } from '../components/EpisodeProgress.tsx';
+import { checkShot } from '../../shared/consistency.ts';
 import { estimateSeconds, speakers } from '../util.ts';
 import {
   EPISODE_FORMAT_LABEL, EPISODE_STATUS_LABEL, SHOT_STATUS_LABEL,
@@ -97,9 +98,16 @@ function ShotBoard({ episode, shots }: { episode: Episode; shots: Shot[] }) {
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState<'' | ShotStatus>('');
   const [view, setView] = useState<'frames' | 'table'>('frames');
+  const [onlyWarn, setOnlyWarn] = useState(false);
+  const characters = useItems('character', { projectId: episode.projectId });
+  const issues = new Map(shots.map((s) => [s.id, checkShot(s, characters ?? [])]));
+  const warnings = (id: string) => (issues.get(id) ?? []).filter((i) => i.level === 'warn').length;
+  const warned = shots.filter((s) => s.status !== 'discarded' && warnings(s.id) > 0).length;
   const openId = params.get('shot');
   const open = shots.find((s) => s.id === openId);
-  const visible = shots.filter((s) => (filter ? s.status === filter : s.status !== 'discarded'));
+  const visible = shots
+    .filter((s) => (filter ? s.status === filter : s.status !== 'discarded'))
+    .filter((s) => !onlyWarn || warnings(s.id) > 0);
   const setOpen = (id: string | null) => {
     const p = new URLSearchParams(params);
     if (id) p.set('shot', id);
@@ -129,6 +137,11 @@ function ShotBoard({ episode, shots }: { episode: Episode; shots: Shot[] }) {
               </button>
             ))}
           </div>
+          {warned > 0 && (
+            <button className={`btn btn-small warn-toggle${onlyWarn ? ' on' : ''}`} aria-pressed={onlyWarn} onClick={() => setOnlyWarn(!onlyWarn)}>
+              ⚠ {warned === 1 ? '1 da ricontrollare' : `${warned} da ricontrollare`}
+            </button>
+          )}
           <span className="grow" />
           <div className="segmented">
             <button className={view === 'frames' ? 'on' : undefined} onClick={() => setView('frames')}>
@@ -155,6 +168,11 @@ function ShotBoard({ episode, shots }: { episode: Episode; shots: Shot[] }) {
                   {s.imageFile ? <Media path={s.imageFile} /> : s.videoFile ? <Media path={s.videoFile} /> : <span className="frame-empty">{s.noImage ? 'Solo grafica' : 'Da generare'}</span>}
                   {s.videoFile && <span className="frame-vid" title="Video pronto">▶</span>}
                   {s.animPriority && <span className={`frame-prio prio-${s.animPriority}`}>{s.animPriority}</span>}
+                  {warnings(s.id) > 0 && (
+                    <span className="frame-warn" title={(issues.get(s.id) ?? []).filter((i) => i.level === 'warn').map((i) => i.text).join('\n')}>
+                      ⚠
+                    </span>
+                  )}
                 </span>
                 <span className="frame-code">{s.code}</span>
                 <span className="frame-title">{s.title || <span className="muted">Senza titolo</span>}</span>
@@ -219,6 +237,9 @@ function ScriptTab({ episode: e, shots, set }: { episode: Episode; shots: Shot[]
             circa {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')} di parlato
           </span>
           <CopyButton text={e.script} label="Copia copione" />
+          <a className="btn btn-small" href={`/api/episodes/${e.id}/export.elevenlabs`}>
+            Scarica per ElevenLabs
+          </a>
         </div>
         <p className="muted small">Tag ElevenLabs tra [parentesi quadre]; le battute iniziano con il nome in maiuscolo (es. KADE:).</p>
         <Area value={e.script} onChange={(script) => set({ script })} rows={18} mono />
@@ -242,6 +263,7 @@ function ScriptTab({ episode: e, shots, set }: { episode: Episode; shots: Shot[]
             Scarica episodio .md
           </a>
         </div>
+        <RemotionPanel episode={e} />
         <table className="table map">
           <thead>
             <tr>
@@ -261,6 +283,69 @@ function ScriptTab({ episode: e, shots, set }: { episode: Episode; shots: Shot[]
         </table>
       </section>
     </div>
+  );
+}
+
+interface PackInfo {
+  dir: string;
+  shots: number;
+  total: number;
+  skipped: string[];
+}
+
+/** Pacchetto Remotion: copia immagini e video nella struttura public/ e genera la timeline. */
+function RemotionPanel({ episode }: { episode: Episode }) {
+  const { data } = useFetch<PackInfo>(`/episodes/${episode.id}/remotion`);
+  const [dir, setDir] = useState('');
+  const [overwrite, setOverwrite] = useState(false);
+  const [result, setResult] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!data) return null;
+  return (
+    <details className="remotion-panel">
+      <summary>
+        Pacchetto Remotion <span className="muted small">— {data.shots} inquadrature, circa {Math.round(data.total)} s</span>
+      </summary>
+      <p className="muted small">
+        Copia immagini e video in <code>public/img</code> e <code>public/vid</code> con i nomi della timeline (S01.png, S05_VID.mp4…),
+        genera <code>src/data/timeline.generated.ts</code> con tempi stimati dal copione e aggiunge il copione per ElevenLabs.
+      </p>
+      <div className="row">
+        <input value={dir || data.dir} onChange={(ev) => setDir(ev.target.value)} aria-label="Cartella del pacchetto" />
+      </div>
+      <div className="row">
+        <label className="check">
+          <input type="checkbox" checked={overwrite} onChange={(ev) => setOverwrite(ev.target.checked)} /> Sostituisci i file già copiati
+        </label>
+        <span className="grow" />
+        <button
+          className="btn btn-primary btn-small"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setResult('');
+            try {
+              const r = await request<{ dir: string; copied: number; kept: number; skipped: string[] }>(`/episodes/${episode.id}/remotion`, {
+                method: 'POST',
+                body: JSON.stringify({ dir: dir || data.dir, overwrite }),
+              });
+              setResult(
+                `Pacchetto pronto in ${r.dir}: ${r.copied} file copiati${r.kept ? `, ${r.kept} già presenti` : ''}.` +
+                  (r.skipped.length ? ` Senza file: ${r.skipped.join(', ')}.` : ''),
+              );
+            } catch (err) {
+              setResult((err as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? 'Creazione…' : 'Crea il pacchetto'}
+        </button>
+      </div>
+      {data.skipped.length > 0 && !result && <p className="small muted">Senza file, restano fuori: {data.skipped.join(', ')}.</p>}
+      {result && <p className="small">{result}</p>}
+    </details>
   );
 }
 

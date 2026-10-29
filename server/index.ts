@@ -11,6 +11,7 @@ import { updateShot } from './service.ts';
 import { applyScan, scanProject } from './scanner.ts';
 import { applySeason, previewSeason, type SeasonImportOptions } from './importers/applySeason.ts';
 import { episodeMarkdown, timelineCsv } from './exporters.ts';
+import { defaultPackDir, elevenLabsScript, remotionPack, remotionTimeline } from './production.ts';
 import { appVersion, loadConfig, ROOT, saveAllowedRoots } from './config.ts';
 import type { Item, Kind } from '../shared/types.ts';
 
@@ -154,6 +155,25 @@ app.post<{ Body: SeasonImportOptions }>('/api/import/season/apply', (req) => app
 app.get<{ Params: { id: string } }>('/api/projects/:id/scan', (req) => scanProject(req.params.id));
 app.post<{ Params: { id: string } }>('/api/projects/:id/scan', (req) => ({ updated: applyScan(req.params.id) }));
 
+app.get<{ Params: { id: string } }>('/api/episodes/:id/remotion', (req, reply) => {
+  const ep = db.get('episode', req.params.id);
+  if (!ep) return reply.status(404).send({ error: 'Non trovato' });
+  const { shots, total, skipped } = remotionTimeline(ep);
+  return { dir: defaultPackDir(ep), shots: shots.length, total, skipped };
+});
+
+// Crea il pacchetto Remotion: scrive solo nelle cartelle dei contenuti o nell'archivio dell'app.
+app.post<{ Params: { id: string }; Body: { dir?: string; overwrite?: boolean } }>('/api/episodes/:id/remotion', (req, reply) => {
+  const ep = db.get('episode', req.params.id);
+  if (!ep) return reply.status(404).send({ error: 'Non trovato' });
+  const dir = path.resolve(req.body?.dir || defaultPackDir(ep));
+  const roots = [db.DATA_DIR, ...config.allowedRoots].map((r) => path.resolve(r).toLowerCase() + path.sep);
+  if (!roots.some((r) => (dir.toLowerCase() + path.sep).startsWith(r))) {
+    throw Object.assign(new Error('La cartella del pacchetto deve stare dentro una delle cartelle dei contenuti.'), { statusCode: 403 });
+  }
+  return remotionPack(ep, dir, { overwrite: !!req.body?.overwrite });
+});
+
 app.get<{ Params: { id: string; format: string } }>('/api/episodes/:id/export.:format', (req, reply) => {
   const ep = db.get('episode', req.params.id);
   if (!ep) return reply.status(404).send({ error: 'Non trovato' });
@@ -161,6 +181,10 @@ app.get<{ Params: { id: string; format: string } }>('/api/episodes/:id/export.:f
   if (req.params.format === 'csv') {
     reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="${encodeURIComponent(base)}_timeline.csv"`);
     return timelineCsv(ep);
+  }
+  if (req.params.format === 'elevenlabs') {
+    reply.header('Content-Type', 'text/plain; charset=utf-8').header('Content-Disposition', `attachment; filename="${encodeURIComponent(ep.code || 'episodio')}_doppiaggio_ElevenLabs.txt"`);
+    return elevenLabsScript(ep);
   }
   reply.header('Content-Type', 'text/markdown; charset=utf-8').header('Content-Disposition', `attachment; filename="${encodeURIComponent(base)}.md"`);
   return episodeMarkdown(ep);

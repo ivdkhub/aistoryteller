@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api, baseName, useAutosave, useItems } from '../api.ts';
+import { api, useAutosave, useItems } from '../api.ts';
 import { Area, CopyButton, DeleteButton, Field, FilePicker, Media, Modal, SaveBadge, Select, Text } from './ui.tsx';
 import { Composer } from './Composer.tsx';
-import { plural } from '../util.ts';
+import { GalleryStrip } from './Gallery.tsx';
 import { PromptList } from './PromptList.tsx';
+import { checkShot } from '../../shared/consistency.ts';
 import { SHOT_STATUS_LABEL, type AnimPriority, type Shot, type ShotStatus } from '../../shared/types.ts';
 
 interface Props {
@@ -34,6 +35,7 @@ export function ShotEditor({ shot, onClose, onPrev, onNext }: Props) {
 
   if (!s) return null;
   const cast = (characters ?? []).filter((c) => !c.voiceOnly);
+  const issues = checkShot(s, characters ?? []);
   const toggle = (id: string) => set({ characterIds: s.characterIds.includes(id) ? s.characterIds.filter((x) => x !== id) : [...s.characterIds, id] });
 
   return (
@@ -63,6 +65,17 @@ export function ShotEditor({ shot, onClose, onPrev, onNext }: Props) {
           ))}
         </div>
 
+        {issues.length > 0 && (
+          <ul className="issues">
+            {issues.map((i, n) => (
+              <li key={n} className={`issue issue-${i.level}`}>
+                <span aria-hidden>{i.level === 'warn' ? '⚠' : 'ⓘ'}</span>
+                <span>{i.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="media-pair">
           <div>
             <span className="field-label">Immagine</span>
@@ -85,27 +98,7 @@ export function ShotEditor({ shot, onClose, onPrev, onNext }: Props) {
             />
           </div>
         </div>
-        {s.alternates.length > 0 && (
-          <details className="alternates">
-            <summary>{plural(s.alternates.length, 'variante o scarto', 'varianti e scarti')} su disco</summary>
-            <ul>
-              {s.alternates.map((a) => (
-                <li key={a}>
-                  <div className="thumb-sm">
-                    <Media path={a} />
-                  </div>
-                  <span className="small grow">{baseName(a)}</span>
-                  <button
-                    className="btn btn-small btn-ghost"
-                    onClick={() => set(/\.(mp4|mov|webm)$/i.test(a) ? { videoFile: a } : { imageFile: a })}
-                  >
-                    Usa questa
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <GalleryStrip shot={s} onUse={set} />
 
         <Field label="Personaggi">
           <div className="chips">

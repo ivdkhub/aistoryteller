@@ -6,6 +6,8 @@ import { CharacterForm, EpisodeForm } from '../components/forms.tsx';
 import { PromptList } from '../components/PromptList.tsx';
 import { Composer } from '../components/Composer.tsx';
 import { IdeasBoard } from '../components/IdeasBoard.tsx';
+import { StoryTab } from '../components/StoryTab.tsx';
+import { GenerationQueue } from '../components/GenerationQueue.tsx';
 import { Progress } from './Home.tsx';
 import { ProgressBar } from '../components/EpisodeProgress.tsx';
 import { formatDate, plural } from '../util.ts';
@@ -14,16 +16,16 @@ import {
   type Brand, type Project, type ProjectStatus, type ProjectType, type StylePreset,
 } from '../../shared/types.ts';
 
-type Tab = 'panoramica' | 'personaggi' | 'episodi' | 'prompt' | 'stili' | 'bibbia' | 'brand' | 'idee';
+type Tab = 'panoramica' | 'personaggi' | 'episodi' | 'generare' | 'voti' | 'prompt' | 'stili' | 'bibbia' | 'brand' | 'idee';
 
 const TABS: Record<ProjectType, [Tab, string][]> = {
-  base: [['panoramica', 'Panoramica'], ['episodi', 'Post'], ['prompt', 'Prompt'], ['stili', 'Stili'], ['idee', 'Idee']],
+  base: [['panoramica', 'Panoramica'], ['episodi', 'Post'], ['generare', 'Da generare'], ['prompt', 'Prompt'], ['stili', 'Stili'], ['idee', 'Idee']],
   characters: [
-    ['panoramica', 'Panoramica'], ['personaggi', 'Personaggi'], ['episodi', 'Episodi'], ['prompt', 'Prompt'],
-    ['stili', 'Stili'], ['bibbia', 'Bibbia'], ['idee', 'Idee'],
+    ['panoramica', 'Panoramica'], ['personaggi', 'Personaggi'], ['episodi', 'Episodi'], ['generare', 'Da generare'],
+    ['voti', 'Voti e rami'], ['prompt', 'Prompt'], ['stili', 'Stili'], ['bibbia', 'Bibbia'], ['idee', 'Idee'],
   ],
   ai_influencer: [
-    ['panoramica', 'Panoramica'], ['personaggi', 'Persona'], ['episodi', 'Post'], ['prompt', 'Prompt'],
+    ['panoramica', 'Panoramica'], ['personaggi', 'Persona'], ['episodi', 'Post'], ['generare', 'Da generare'], ['prompt', 'Prompt'],
     ['stili', 'Stili'], ['brand', 'Linee guida'], ['idee', 'Idee'],
   ],
 };
@@ -57,6 +59,8 @@ export function ProjectPage() {
       {current === 'panoramica' && <Overview p={p} set={set} />}
       {current === 'personaggi' && <Characters project={p} />}
       {current === 'episodi' && <Episodes project={p} />}
+      {current === 'generare' && <GenerationQueue project={p} />}
+      {current === 'voti' && <StoryTab project={p} set={set} />}
       {current === 'prompt' && <Prompts project={p} />}
       {current === 'stili' && <Styles project={p} />}
       {current === 'bibbia' && (
