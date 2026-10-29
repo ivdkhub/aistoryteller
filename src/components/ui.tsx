@@ -11,9 +11,11 @@ export function initial(a: Pick<Account, 'name' | 'handle'>) {
 export function Avatar({ account, className = 'avatar' }: { account: Pick<Account, 'name' | 'handle' | 'color' | 'avatar'>; className?: string }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [account.avatar]);
+  const photo = !!account.avatar && !broken;
+  // Con la foto niente sfondo colorato: un avatar ritagliato a cerchio lascerebbe gli angoli pieni.
   return (
-    <span className={className} style={{ background: account.color }}>
-      {account.avatar && !broken ? <img src={fileUrl(account.avatar)} alt="" draggable={false} onError={() => setBroken(true)} /> : initial(account)}
+    <span className={photo ? `${className} has-photo` : className} style={photo ? undefined : { background: account.color }}>
+      {photo ? <img src={fileUrl(account.avatar)} alt="" draggable={false} onError={() => setBroken(true)} /> : initial(account)}
     </span>
   );
 }

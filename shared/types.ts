@@ -61,6 +61,8 @@ export interface Project extends Base {
   logline: string;
   /** Bibbia della serie (markdown): verità, regole, numeri fissi, punti aperti. */
   bible: string;
+  /** Recap della storia (markdown): cosa succede, dall'inizio alla fine, per chi la deve conoscere tutta. */
+  recap: string;
   /** Cartella del progetto sul disco, usata dallo scanner dei file. */
   folder: string;
   brand: Brand;
@@ -254,7 +256,7 @@ const DEFAULTS: { [K in Kind]: Draft<K> } = {
     parentAccountId: '', linkedCharacterId: '',
   },
   project: {
-    accountId: '', title: '', type: 'base', status: 'idea', logline: '', bible: '', folder: '', notes: '', stateDefs: [],
+    accountId: '', title: '', type: 'base', status: 'idea', logline: '', bible: '', recap: '', folder: '', notes: '', stateDefs: [],
     brand: { persona: '', toneOfVoice: '', values: '', pillars: '', donts: '', palette: '', outfits: '', hashtags: '' },
   },
   character: {

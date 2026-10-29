@@ -7,6 +7,7 @@ import { PromptList } from '../components/PromptList.tsx';
 import { Composer } from '../components/Composer.tsx';
 import { IdeasBoard } from '../components/IdeasBoard.tsx';
 import { StoryTab } from '../components/StoryTab.tsx';
+import { Markdown } from '../components/Markdown.tsx';
 import { GenerationQueue } from '../components/GenerationQueue.tsx';
 import { Progress } from './Home.tsx';
 import { ProgressBar } from '../components/EpisodeProgress.tsx';
@@ -16,12 +17,12 @@ import {
   type Brand, type Project, type ProjectStatus, type ProjectType, type StylePreset,
 } from '../../shared/types.ts';
 
-type Tab = 'panoramica' | 'personaggi' | 'episodi' | 'generare' | 'voti' | 'prompt' | 'stili' | 'bibbia' | 'brand' | 'idee';
+type Tab = 'panoramica' | 'recap' | 'personaggi' | 'episodi' | 'generare' | 'voti' | 'prompt' | 'stili' | 'bibbia' | 'brand' | 'idee';
 
 const TABS: Record<ProjectType, [Tab, string][]> = {
   base: [['panoramica', 'Panoramica'], ['episodi', 'Post'], ['generare', 'Da generare'], ['prompt', 'Prompt'], ['stili', 'Stili'], ['idee', 'Idee']],
   characters: [
-    ['panoramica', 'Panoramica'], ['personaggi', 'Personaggi'], ['episodi', 'Episodi'], ['generare', 'Da generare'],
+    ['panoramica', 'Panoramica'], ['recap', 'Recap'], ['personaggi', 'Personaggi'], ['episodi', 'Episodi'], ['generare', 'Da generare'],
     ['voti', 'Voti e rami'], ['prompt', 'Prompt'], ['stili', 'Stili'], ['bibbia', 'Bibbia'], ['idee', 'Idee'],
   ],
   ai_influencer: [
@@ -57,6 +58,7 @@ export function ProjectPage() {
       <Tabs tabs={tabs} value={current} onChange={(t) => navigate(`/progetto/${p.id}/${t}`)} />
 
       {current === 'panoramica' && <Overview p={p} set={set} />}
+      {current === 'recap' && <Recap p={p} set={set} />}
       {current === 'personaggi' && <Characters project={p} />}
       {current === 'episodi' && <Episodes project={p} />}
       {current === 'generare' && <GenerationQueue project={p} />}
@@ -118,6 +120,21 @@ function Overview({ p, set }: { p: Project; set: (patch: Partial<Project>) => vo
               ))}
           </ul>
         </div>
+        {TABS[p.type].some(([k]) => k === 'recap') && (
+          <div className="panel">
+            <div className="section-head">
+              <h2 className="grow">Recap della storia</h2>
+              <Link to={`/progetto/${p.id}/recap`} className="btn btn-small">
+                {p.recap ? 'Leggi tutto' : 'Scrivi il recap'}
+              </Link>
+            </div>
+            {p.recap ? (
+              <p className="clamp-3">{p.recap.replace(/^#+\s.*$/gm, '').replace(/[*>#]/g, '').trim()}</p>
+            ) : (
+              <p className="muted">Ancora vuoto: riassumi cosa succede nella storia, dall'inizio alla fine.</p>
+            )}
+          </div>
+        )}
         <div className="panel form">
           <Field label="In una frase">
             <Area value={p.logline} onChange={(logline) => set({ logline })} rows={2} />
@@ -188,6 +205,36 @@ function Overview({ p, set }: { p: Project; set: (patch: Partial<Project>) => vo
         />
       )}
     </div>
+  );
+}
+
+function Recap({ p, set }: { p: Project; set: (patch: Partial<Project>) => void }) {
+  const [edit, setEdit] = useState(!p.recap);
+  return (
+    <section className="stack">
+      <div className="section-head">
+        <p className="muted">
+          Tutta la storia in poche pagine: chi sono i personaggi, cosa succede episodio per episodio, i rami dei voti, il
+          finale e cosa resta aperto. Chi lo legge deve sapere tutto senza aprire la bibbia.
+        </p>
+        <button className="btn" type="button" onClick={() => setEdit(!edit)}>
+          {edit ? 'Leggi' : 'Modifica'}
+        </button>
+      </div>
+      <div className="panel">
+        {edit ? (
+          <Area
+            value={p.recap}
+            onChange={(recap) => set({ recap })}
+            rows={24}
+            mono
+            placeholder={'## In breve\n…\n\n## Episodio per episodio\n- **EP01** …'}
+          />
+        ) : (
+          <Markdown text={p.recap} />
+        )}
+      </div>
+    </section>
   );
 }
 

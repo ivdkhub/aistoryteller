@@ -207,6 +207,7 @@ function projectMarkdown(p: Project) {
   const b = p.brand;
   const brand = Object.entries({ Persona: b.persona, 'Tono di voce': b.toneOfVoice, Valori: b.values, Pilastri: b.pillars, 'Da non fare': b.donts, Palette: b.palette, Outfit: b.outfits, Hashtag: b.hashtags }).filter(([, v]) => v);
   if (brand.length) lines.push('## Linee guida', '', ...brand.map(([k, v]) => `**${k}:** ${v}`), '');
+  if (p.recap) lines.push('## Recap della storia', '', p.recap, '');
   if (p.bible) lines.push('## Bibbia', '', p.bible, '');
   if (p.notes) lines.push('## Note', '', p.notes, '');
   return lines.join('\n');
