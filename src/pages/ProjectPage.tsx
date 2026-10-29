@@ -7,6 +7,7 @@ import { PromptList } from '../components/PromptList.tsx';
 import { Composer } from '../components/Composer.tsx';
 import { IdeasBoard } from '../components/IdeasBoard.tsx';
 import { Progress } from './Home.tsx';
+import { ProgressBar } from '../components/EpisodeProgress.tsx';
 import { formatDate } from '../util.ts';
 import {
   EPISODE_FORMAT_LABEL, EPISODE_STATUS_LABEL, PROJECT_STATUS_LABEL, PROJECT_TYPE_LABEL,
@@ -273,14 +274,14 @@ function Episodes({ project }: { project: Project }) {
             <th>Titolo</th>
             <th>Formato</th>
             <th>Stato</th>
-            <th>Inquadrature</th>
+            <th>Avanzamento</th>
             <th>Uscita</th>
             <th>Voto</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((e) => {
-            const es = (shots ?? []).filter((s) => s.episodeId === e.id && s.status !== 'discarded');
+            const es = (shots ?? []).filter((s) => s.episodeId === e.id);
             const sat = accounts?.find((a) => a.id === e.publishAccountId);
             return (
               <tr key={e.id} onClick={() => navigate(`/episodio/${e.id}`)} className="row-link">
@@ -293,7 +294,9 @@ function Episodes({ project }: { project: Project }) {
                 <td>
                   <span className={`ep-status ep-${e.status}`}>{EPISODE_STATUS_LABEL[e.status]}</span>
                 </td>
-                <td>{es.length ? `${es.filter((s) => s.status !== 'todo').length}/${es.length}` : '—'}</td>
+                <td>
+                  <ProgressBar episode={e} shots={es} />
+                </td>
                 <td>{e.publishDate ? formatDate(e.publishDate) : '—'}</td>
                 <td className="small">
                   {e.vote.options.join(' / ')}

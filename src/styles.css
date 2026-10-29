@@ -392,6 +392,50 @@ h1 { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .revisions li { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
 .revisions li.done span { text-decoration: line-through; color: var(--muted); }
 
+/* --- Linea di avanzamento della produzione --- */
+.progress-line { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 0.9rem 1.1rem 0.8rem; }
+.progress-line-head { display: flex; align-items: baseline; gap: 0.7rem; margin-bottom: 0.7rem; }
+.progress-line-head strong { font: 700 1.5rem var(--display); }
+.pl-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.pl-step { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.2rem; padding: 0 0.2rem; }
+/* Tratto che unisce la tappa alla precedente: pieno quanto la tappa è avanzata. */
+.pl-step + .pl-step::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: calc(50% + 15px);
+  width: calc(100% - 30px);
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--ink) var(--fill), var(--line) var(--fill));
+}
+.pl-node {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--paper);
+  font: 700 0.8rem var(--sans);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+.pl-node:hover:not(:disabled) { border-color: var(--ink); }
+.pl-node:disabled { cursor: default; }
+.pl-partial .pl-node { border-color: var(--ink); background: conic-gradient(var(--tape) var(--fill), var(--surface) 0); }
+.pl-done .pl-node { background: var(--ink); border-color: var(--ink); }
+.pl-label { font-size: 0.82rem; font-weight: 600; }
+.pl-todo .pl-label { color: var(--muted); font-weight: 500; }
+.pl-detail { font-size: 0.72rem; color: var(--muted); line-height: 1.2; }
+
+.pl-bar { display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap; }
+.pl-bar-track { display: inline-flex; gap: 2px; }
+.pl-bar-track i { width: 9px; height: 7px; border-radius: 1px; background: linear-gradient(90deg, var(--ink) var(--fill), var(--line) var(--fill)); }
+.pl-bar-track i.done { background: var(--ink); }
+.pl-bar-pct { font: 500 0.76rem var(--mono); color: var(--muted); min-width: 3ch; }
+
 /* --- Prompt e composer --- */
 .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.25rem 0.7rem; font: 500 0.82rem var(--sans); cursor: pointer; color: var(--ink); display: inline-flex; gap: 0.35rem; align-items: center; }
@@ -479,6 +523,8 @@ h1 { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
   .kanban { grid-template-columns: minmax(0, 1fr); }
   .frames { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); padding: 0.7rem; }
   .cal-day { min-height: 70px; }
+  .pl-steps { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 0.8rem; }
+  .pl-step + .pl-step::before { display: none; }
   .table { display: block; overflow-x: auto; }
   h1, .title-input { font-size: 1.5rem; }
 }

@@ -150,6 +150,8 @@ export interface Episode extends Base {
   metrics: Metrics;
   /** Episodio a cui è legato (per i post del profilo satellite). */
   linkedEpisodeId: string;
+  /** Tappe di produzione spuntate a mano (chiave della tappa → fatto). */
+  checklist: Record<string, boolean>;
   notes: string;
 }
 
@@ -251,7 +253,7 @@ const DEFAULTS: { [K in Kind]: Draft<K> } = {
     accountId: '', projectId: '', publishAccountId: '', code: '', number: 0, title: '', format: 'reel', status: 'idea',
     duration: '', publishDate: '', info: '', voices: '', caption: '', hashtags: '', cta: '',
     vote: { options: [], winner: '', percent: '', notes: '' }, branches: [], stateVars: {}, script: '',
-    revisions: [], metrics: { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 }, linkedEpisodeId: '', notes: '',
+    revisions: [], metrics: { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 }, linkedEpisodeId: '', checklist: {}, notes: '',
   },
   shot: {
     accountId: '', projectId: '', episodeId: '', code: '', title: '', order: 0, characterIds: [], refs: '',

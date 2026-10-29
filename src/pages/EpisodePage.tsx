@@ -4,6 +4,7 @@ import { api, useAutosave, useItem, useItems } from '../api.ts';
 import { Area, CopyButton, DeleteButton, Empty, Field, Media, SaveBadge, Select, Tabs, Text } from '../components/ui.tsx';
 import { ShotEditor } from '../components/ShotEditor.tsx';
 import { PromptList } from '../components/PromptList.tsx';
+import { EpisodeProgress } from '../components/EpisodeProgress.tsx';
 import { estimateSeconds, speakers } from '../util.ts';
 import {
   EPISODE_FORMAT_LABEL, EPISODE_STATUS_LABEL, SHOT_STATUS_LABEL,
@@ -59,6 +60,7 @@ export function EpisodePage() {
           />
         </Field>
       </div>
+      <EpisodeProgress episode={e} shots={sorted} onToggle={(checklist) => set({ checklist })} />
       <Tabs
         tabs={[
           ['inquadrature', 'Inquadrature', sorted.length],

@@ -5,6 +5,7 @@ import { Empty, Modal } from '../components/ui.tsx';
 import { AccountForm } from '../components/forms.tsx';
 import { EPISODE_STATUS_LABEL, PROJECT_TYPE_LABEL, type Episode, type Shot, type ShotStatus } from '../../shared/types.ts';
 import { formatDate } from '../util.ts';
+import { ProgressBar } from '../components/EpisodeProgress.tsx';
 
 const ORDER: ShotStatus[] = ['edited', 'video', 'image', 'todo'];
 
@@ -77,6 +78,7 @@ export function Home() {
                   <span className="grow">
                     <span className="code">{e.code}</span> {e.title}
                   </span>
+                  <ProgressBar episode={e} shots={(shots ?? []).filter((s) => s.episodeId === e.id)} />
                   <span className="account-chip" style={{ borderColor: accountOf(e)?.color }}>
                     {accountOf(e)?.handle || accountOf(e)?.name}
                   </span>

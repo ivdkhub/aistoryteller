@@ -5,5 +5,5 @@ import config from './config.json' with { type: 'json' };
 export default defineConfig({
   plugins: [react()],
   server: { proxy: { '/api': `http://localhost:${config.port}` } },
-  test: { include: ['server/**/*.test.ts'] },
+  test: { include: ['server/**/*.test.ts', 'shared/**/*.test.ts'] },
 } as never);
