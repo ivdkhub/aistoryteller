@@ -2,13 +2,51 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Draft, ItemByKind, Kind } from '../shared/types.ts';
 
+export interface PeerInfo {
+  nodeId: string;
+  nodeName: string;
+  updatedAt: string;
+  itemsCount: number;
+}
+
+export interface SyncBrief {
+  enabled: boolean;
+  state: 'disabled' | 'idle' | 'syncing' | 'error';
+  folder: string;
+  nodeName: string;
+  lastPushAt: string;
+  lastPullAt: string;
+  error: string;
+  peers: PeerInfo[];
+}
+
 // Ogni modifica incrementa la versione: gli hook di lettura ricaricano i dati.
 let version = 0;
 const listeners = new Set<() => void>();
+let currentSync: SyncBrief | null = null;
+const syncListeners = new Set<() => void>();
+
 export function bump() {
   version++;
   listeners.forEach((l) => l());
 }
+
+function setSyncBrief(next: SyncBrief | null) {
+  if (JSON.stringify(currentSync) === JSON.stringify(next)) return;
+  currentSync = next;
+  syncListeners.forEach((l) => l());
+}
+
+export function useSyncBrief(): SyncBrief | null {
+  return useSyncExternalStore(
+    (cb) => {
+      syncListeners.add(cb);
+      return () => syncListeners.delete(cb);
+    },
+    () => currentSync,
+  );
+}
+
 function useVersion() {
   return useSyncExternalStore(
     (cb) => {
@@ -21,14 +59,15 @@ function useVersion() {
 
 /**
  * Controlla ogni pochi secondi se l'archivio è cambiato fuori dalla pagina
- * (es. modifiche di Claude Code tramite il server MCP) e ricarica i dati.
+ * (es. modifiche del socio su Google Drive o di Claude Code tramite il server MCP) e ricarica i dati.
  */
-export function watchChanges(intervalMs = 2500) {
+export function watchChanges(intervalMs = 1500) {
   let last = '';
   const check = async () => {
     if (document.hidden) return;
     try {
-      const { stamp } = await request<{ stamp: string }>('/changes');
+      const { stamp, sync } = await request<{ stamp: string; sync?: SyncBrief }>('/changes');
+      if (sync) setSyncBrief(sync);
       if (last && stamp !== last) bump();
       last = stamp;
     } catch {

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bump, request, useFetch, useItems } from '../api.ts';
+import { bump, request, useFetch, useItems, type PeerInfo } from '../api.ts';
 import { Browser, Field, Select } from '../components/ui.tsx';
-import { plural } from '../util.ts';
+import { formatDate, plural } from '../util.ts';
 
 interface Preview {
   title: string;
@@ -21,10 +21,223 @@ export function ImportPage() {
       <header className="page-head">
         <h1>Import e backup</h1>
       </header>
+      <DriveSync />
       <SeasonImport />
       <Roots />
       <Backup />
     </div>
+  );
+}
+
+interface SyncApiStatus {
+  enabled: boolean;
+  folder: string;
+  folderExists: boolean;
+  nodeId: string;
+  nodeName: string;
+  state: 'disabled' | 'idle' | 'syncing' | 'error';
+  lastPushAt: string;
+  lastPullAt: string;
+  lastChangeAt: string;
+  error: string;
+  peers: PeerInfo[];
+  stats: { pushed: number; pulled: number; mediaCopied: number };
+  detectedDriveFolders?: string[];
+}
+
+/** Collaborazione in tempo reale tramite una cartella condivisa su Google Drive per Desktop. */
+function DriveSync() {
+  const { data } = useFetch<SyncApiStatus>('/sync');
+  const [status, setStatus] = useState<SyncApiStatus | null>(null);
+  const [folder, setFolder] = useState('');
+  const [nodeName, setNodeName] = useState('');
+  const [browse, setBrowse] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+
+  const cur = status ?? data;
+  useEffect(() => {
+    if (data && !status) {
+      setFolder(data.folder);
+      setNodeName(data.nodeName);
+    }
+  }, [data, status]);
+
+  const applyConfig = async (nextFolder: string, nextName: string) => {
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const r = await request<SyncApiStatus>('/sync', {
+        method: 'PUT',
+        body: JSON.stringify({ folder: nextFolder.trim(), nodeName: nextName.trim() }),
+      });
+      setStatus({ ...r, detectedDriveFolders: cur?.detectedDriveFolders });
+      setFolder(r.folder);
+      setNodeName(r.nodeName);
+      setMsg(r.enabled ? 'Sincronizzazione continua attivata.' : 'Sincronizzazione disattivata.');
+      bump();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncNow = async () => {
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const r = await request<SyncApiStatus>('/sync/now', { method: 'POST' });
+      setStatus({ ...r, detectedDriveFolders: cur?.detectedDriveFolders });
+      setMsg('Sincronizzato ora con la cartella condivisa.');
+      bump();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const detected = cur?.detectedDriveFolders ?? [];
+
+  return (
+    <section className="panel stack sync-panel">
+      <div className="row">
+        <h2 className="grow">Collaborazione in tempo reale (Google Drive)</h2>
+        {cur && (
+          <span className={`ep-status sync-badge-${cur.state}`}>
+            {cur.state === 'disabled'
+              ? 'Non attiva'
+              : cur.state === 'error'
+                ? 'Errore cartella'
+                : cur.state === 'syncing'
+                  ? 'Sincronizzazione…'
+                  : 'Attiva in tempo reale'}
+          </span>
+        )}
+      </div>
+      <p className="muted">
+        Lavora contemporaneamente con il tuo socio: scegliete una cartella condivisa su <strong>Google Drive per Desktop</strong>.
+        Ogni vostro PC mantiene il database SQLite locale ultra-rapido e scrive il proprio stato in file separati senza conflitti
+        dentro <code>.storyteller-sync</code> (con fusione automatica campo per campo, propagazione delle eliminazioni, copia dei
+        media caricati e traduzione automatica dei percorsi tra i due PC).
+      </p>
+
+      <div className="grid-2">
+        <Field label="Cartella condivisa Google Drive" hint="Es. G:\Il mio Drive\AI Story Teller Condivisa">
+          <div className="row">
+            <input
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder="Percorso della cartella condivisa su Google Drive"
+              aria-label="Cartella condivisa Google Drive"
+            />
+            <button className="btn" type="button" onClick={() => setBrowse(true)}>
+              Sfoglia
+            </button>
+          </div>
+        </Field>
+        <Field label="Il tuo nome (visibile al socio)" hint="Identifica la tua postazione nella barra in alto.">
+          <input
+            value={nodeName}
+            onChange={(e) => setNodeName(e.target.value)}
+            placeholder="Es. Marco, Studio, Portatile…"
+            aria-label="Il tuo nome"
+          />
+        </Field>
+      </div>
+
+      {detected.length > 0 && (
+        <div className="row small">
+          <span className="muted">Google Drive rilevati su questo PC:</span>
+          {detected.map((d) => (
+            <button
+              key={d}
+              type="button"
+              className="chip"
+              onClick={() => setFolder(`${d}\\AI Story Teller Sync`)}
+              title={`Imposta ${d}\\AI Story Teller Sync`}
+            >
+              Usa {d}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="row">
+        <button
+          className="btn btn-primary"
+          disabled={busy || !folder.trim()}
+          onClick={() => void applyConfig(folder, nodeName)}
+        >
+          {cur?.enabled && cur.folder === folder.trim() ? 'Aggiorna impostazioni' : 'Attiva sincronizzazione continua'}
+        </button>
+        {cur?.enabled && (
+          <>
+            <button className="btn" disabled={busy} onClick={() => void syncNow()}>
+              Sincronizza ora
+            </button>
+            <button
+              className="btn btn-ghost btn-danger-text"
+              disabled={busy}
+              onClick={() => void applyConfig('', nodeName)}
+            >
+              Scollega
+            </button>
+          </>
+        )}
+        {msg && <span className="small muted">{msg}</span>}
+      </div>
+
+      {(error || cur?.error) && <p className="error">{error || cur?.error}</p>}
+
+      {cur?.enabled && (
+        <div className="sync-details">
+          <div className="row small muted">
+            <span>ID nodo: <code>{cur.nodeId}</code></span>
+            {cur.lastPushAt && <span>· Ultimo invio: {formatDate(cur.lastPushAt)}</span>}
+            {cur.lastPullAt && <span>· Ultimo controllo: {formatDate(cur.lastPullAt)}</span>}
+            {cur.stats.mediaCopied > 0 && <span>· File media allineati: {cur.stats.mediaCopied}</span>}
+          </div>
+          {cur.peers.length > 0 ? (
+            <div className="sync-peers">
+              <h4>Soci collegati alla cartella</h4>
+              <ul className="list">
+                {cur.peers.map((p) => (
+                  <li key={p.nodeId} className="list-link">
+                    <span className="sync-peer-dot" aria-hidden />
+                    <strong>{p.nodeName}</strong>
+                    <span className="muted small">({p.itemsCount} elementi)</span>
+                    <span className="grow" />
+                    <span className="muted small">Ultimo aggiornamento: {formatDate(p.updatedAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="muted small">
+              Nessun altro socio rilevato per ora. Quando il tuo socio avvierà AI Story Teller puntando alla stessa cartella Drive,
+              comparirà qui e le modifiche si uniranno in automatico in meno di 2 secondi.
+            </p>
+          )}
+        </div>
+      )}
+
+      {browse && (
+        <Browser
+          mode="folder"
+          start={folder}
+          onClose={() => setBrowse(false)}
+          onPick={(p) => {
+            setFolder(p);
+            setBrowse(false);
+          }}
+        />
+      )}
+    </section>
   );
 }
 

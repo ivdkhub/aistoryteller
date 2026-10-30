@@ -17,9 +17,21 @@ import { storyStates } from '../shared/story.ts';
 import { generationQueue } from '../shared/queue.ts';
 import { defaultPackDir, elevenLabsScript, remotionPack, remotionTimeline } from './production.ts';
 import { attachmentsFor, buildImagePrompt, buildVideoPrompt } from '../shared/compose.ts';
+import { loadConfig, saveSyncConfig } from './config.ts';
+import { configureSync, getSyncStatus, notifyLocalWrite, recordDelete, syncNow } from './sync.ts';
 import { defaults, KINDS, type Item, type Kind } from '../shared/types.ts';
 
+const config = loadConfig();
 db.openDb();
+db.setWriteHook((ev) => {
+  if (ev.type === 'delete') recordDelete(ev.ids);
+  else notifyLocalWrite();
+});
+await configureSync({
+  folder: config.syncFolder,
+  nodeName: config.syncNodeName,
+  getContentRoots: () => config.allowedRoots,
+});
 
 const server = new McpServer({ name: 'ai-story-teller', version: '1.0.0' });
 
@@ -386,6 +398,28 @@ tool('esporta_backup', 'Scrive un backup completo dell\'archivio in JSON nel per
   fs.writeFileSync(filePath, JSON.stringify({ app: 'ai-story-teller', version: 1, exportedAt: new Date().toISOString(), items }, null, 1), 'utf8');
   return `Backup di ${items.length} elementi scritto in ${filePath}.`;
 });
+
+tool(
+  'sincronizza_drive',
+  'Gestisce o forza la sincronizzazione continua con il socio tramite cartella condivisa (es. Google Drive). Senza argomenti esegue subito una sincronizzazione bidirezionale e mostra lo stato e i soci collegati.',
+  {
+    cartella: z.string().optional().describe('Percorso della cartella condivisa su Google Drive (stringa vuota per disattivare).'),
+    nomeSocio: z.string().optional().describe('Nome della tua postazione visibile al socio.'),
+  },
+  async ({ cartella, nomeSocio }) => {
+    if (cartella !== undefined || nomeSocio !== undefined) {
+      const saved = saveSyncConfig(cartella ?? config.syncFolder, nomeSocio ?? config.syncNodeName);
+      config.syncFolder = saved.syncFolder;
+      config.syncNodeName = saved.syncNodeName;
+      return configureSync({
+        folder: config.syncFolder,
+        nodeName: config.syncNodeName,
+        getContentRoots: () => config.allowedRoots,
+      });
+    }
+    return config.syncFolder ? syncNow() : getSyncStatus();
+  },
+);
 
 // --- Comandi pronti (in Claude Code compaiono come comandi slash) ------------
 

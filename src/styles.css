@@ -1,4 +1,4 @@
-/* AI Story Teller — interfaccia in stile macOS (scrivania, finestra, controlli di sistema) */
+﻿/* AI Story Teller â€” interfaccia in stile macOS (scrivania, finestra, controlli di sistema) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
@@ -232,7 +232,7 @@ hr { border: 0; border-top: 1px solid var(--separator); margin: 10px 0; }
 .tl-close { background: #ff5f57; }
 .tl-min { background: #febc2e; }
 .tl-zoom { background: #28c840; }
-.traffic-lights:hover .tl-min::after { content: '–'; }
+.traffic-lights:hover .tl-min::after { content: 'â€“'; }
 .tl-min, .tl-zoom { position: relative; font: 700 9px/12px var(--font); color: rgba(0, 0, 0, 0.55); text-align: center; }
 .traffic-lights:hover .tl-zoom::after { content: '+'; }
 
@@ -1050,3 +1050,19 @@ h1 { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .page { padding: 0; }
   textarea, input { box-shadow: none !important; resize: none; }
 }
+
+/* ============ Sincronizzazione Google Drive ============ */
+.sync-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px; }
+.sync-disabled { color: var(--label-2); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+.sync-syncing .sync-dot { background: var(--accent); animation: sync-pulse 0.9s infinite alternate; }
+.sync-error .sync-dot { background: var(--red); }
+.sync-badge-idle { background: color-mix(in srgb, var(--green) 18%, transparent); color: color-mix(in srgb, var(--green) 70%, black); }
+.sync-badge-syncing { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.sync-badge-error { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+@media (prefers-color-scheme: dark) {
+  .sync-badge-idle { color: var(--green); }
+}
+.sync-details { border-top: 0.5px solid var(--separator); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.sync-peer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+@keyframes sync-pulse { from { opacity: 0.35; transform: scale(0.85); } to { opacity: 1; transform: scale(1.1); } }

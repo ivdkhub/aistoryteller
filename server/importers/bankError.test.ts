@@ -118,7 +118,7 @@ describe.runIf(fs.existsSync(REAL))('parseSeason (documento reale Bank Error)', 
 
   it('legge la variabile TRACE e gli effetti dei voti', () => {
     expect(s.stateDefs).toEqual([{ name: 'TRACE', start: 12, startEpisode: 2, min: 5, max: 95, unit: '%' }]);
-    expect(s.voteEffects.find((v) => v.episode === 6)?.effects).toEqual({ PLAY: -15, GHOST: 10 });
+    expect(s.voteEffects.find((v) => v.episode === 5)?.effects).toEqual({ COVER: 15, ESCAPE: 0 });
   });
 
   it('EP02 ha inquadrature con prompt non vuoti', () => {

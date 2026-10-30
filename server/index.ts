@@ -12,13 +12,23 @@ import { applyScan, episodeCuts, scanProject } from './scanner.ts';
 import { applySeason, previewSeason, type SeasonImportOptions } from './importers/applySeason.ts';
 import { episodeMarkdown, timelineCsv } from './exporters.ts';
 import { defaultPackDir, elevenLabsScript, remotionPack, remotionTimeline } from './production.ts';
-import { appVersion, loadConfig, ROOT, saveAllowedRoots } from './config.ts';
+import { appVersion, loadConfig, ROOT, saveAllowedRoots, saveSyncConfig } from './config.ts';
+import { configureSync, detectGoogleDriveFolders, getSyncStatus, notifyLocalWrite, recordDelete, syncMediaFiles, syncNow } from './sync.ts';
 import type { Item, Kind } from '../shared/types.ts';
 
 const config = loadConfig();
 
 db.openDb();
+db.setWriteHook((ev) => {
+  if (ev.type === 'delete') recordDelete(ev.ids);
+  else notifyLocalWrite();
+});
 seed();
+await configureSync({
+  folder: config.syncFolder,
+  nodeName: config.syncNodeName,
+  getContentRoots: () => config.allowedRoots,
+});
 
 const app = Fastify({ logger: { level: 'warn' }, bodyLimit: 50 * 1024 * 1024 });
 await app.register(multipart, { limits: { fileSize: 500 * 1024 * 1024 } });
@@ -48,7 +58,9 @@ function kindParam(k: string): Kind {
 /** Risolve un percorso "media/..." o assoluto, solo dentro le cartelle consentite. */
 function resolveFile(p: string): string {
   const full = p.startsWith('media/') ? path.join(db.DATA_DIR, p) : path.resolve(p);
-  const roots = [db.MEDIA_DIR, ...config.allowedRoots].map((r) => path.resolve(r).toLowerCase() + path.sep);
+  const roots = [db.MEDIA_DIR, ...(config.syncFolder ? [config.syncFolder] : []), ...config.allowedRoots].map(
+    (r) => path.resolve(r).toLowerCase() + path.sep,
+  );
   if (!roots.some((r) => (full.toLowerCase() + path.sep).startsWith(r))) {
     throw Object.assign(new Error('Percorso fuori dalle cartelle consentite: aggiungila in Import e backup → Cartelle dei contenuti.'), { statusCode: 403 });
   }
@@ -118,12 +130,13 @@ app.post<{ Querystring: { projectId?: string } }>('/api/upload', async (req) => 
   const safe = file.filename.replace(/[<>:"/\\|?*]/g, '_');
   const name = `${Date.now().toString(36)}-${safe}`;
   await pipeline(file.file, fs.createWriteStream(path.join(dir, name)));
+  syncMediaFiles();
   return { path: `${rel}/${name}` };
 });
 
 /** Elenco delle sottocartelle per scegliere la cartella di un progetto. */
 app.get<{ Querystring: { path?: string } }>('/api/fs', (req) => {
-  const roots = config.allowedRoots;
+  const roots = [...new Set([...(config.syncFolder ? [config.syncFolder] : []), ...config.allowedRoots, ...detectGoogleDriveFolders()])];
   if (!req.query.path) return { path: '', parent: '', dirs: roots, files: [] };
   const dir = resolveFile(req.query.path);
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -172,7 +185,9 @@ app.post<{ Params: { id: string }; Body: { dir?: string; overwrite?: boolean } }
   const ep = db.get('episode', req.params.id);
   if (!ep) return reply.status(404).send({ error: 'Non trovato' });
   const dir = path.resolve(req.body?.dir || defaultPackDir(ep));
-  const roots = [db.DATA_DIR, ...config.allowedRoots].map((r) => path.resolve(r).toLowerCase() + path.sep);
+  const roots = [db.DATA_DIR, ...(config.syncFolder ? [config.syncFolder] : []), ...config.allowedRoots].map(
+    (r) => path.resolve(r).toLowerCase() + path.sep,
+  );
   if (!roots.some((r) => (dir.toLowerCase() + path.sep).startsWith(r))) {
     throw Object.assign(new Error('La cartella del pacchetto deve stare dentro una delle cartelle dei contenuti.'), { statusCode: 403 });
   }
@@ -199,6 +214,8 @@ app.get('/api/config', () => ({
   version: appVersion(),
   dataDir: db.DATA_DIR,
   allowedRoots: config.allowedRoots.map((p) => ({ path: p, exists: fs.existsSync(p) })),
+  sync: getSyncStatus(),
+  detectedDriveFolders: detectGoogleDriveFolders(),
 }));
 
 app.put<{ Body: { allowedRoots: string[] } }>('/api/config/roots', (req) => {
@@ -206,7 +223,46 @@ app.put<{ Body: { allowedRoots: string[] } }>('/api/config/roots', (req) => {
   config.allowedRoots = saveAllowedRoots(req.body.allowedRoots);
   return { allowedRoots: config.allowedRoots.map((p) => ({ path: p, exists: fs.existsSync(p) })) };
 });
-app.get('/api/changes', () => ({ stamp: db.stamp() }));
+
+// --- Sincronizzazione Google Drive / Cartella condivisa --------------------
+app.get('/api/sync', () => ({
+  ...getSyncStatus(),
+  detectedDriveFolders: detectGoogleDriveFolders(),
+}));
+
+app.put<{ Body: { folder?: string; nodeName?: string } }>('/api/sync', async (req) => {
+  const folder = typeof req.body?.folder === 'string' ? req.body.folder : config.syncFolder;
+  const nodeName = typeof req.body?.nodeName === 'string' ? req.body.nodeName : config.syncNodeName;
+  const saved = saveSyncConfig(folder, nodeName);
+  config.syncFolder = saved.syncFolder;
+  config.syncNodeName = saved.syncNodeName;
+  // Ricarica anche allowedRoots se saveSyncConfig ha aggiunto la cartella condivisa
+  config.allowedRoots = loadConfig().allowedRoots;
+  return configureSync({
+    folder: config.syncFolder,
+    nodeName: config.syncNodeName,
+    getContentRoots: () => config.allowedRoots,
+  });
+});
+
+app.post('/api/sync/now', async () => syncNow());
+
+app.get('/api/changes', () => {
+  const sync = getSyncStatus();
+  return {
+    stamp: db.stamp(),
+    sync: {
+      enabled: sync.enabled,
+      state: sync.state,
+      folder: sync.folder,
+      nodeName: sync.nodeName,
+      lastPushAt: sync.lastPushAt,
+      lastPullAt: sync.lastPullAt,
+      error: sync.error,
+      peers: sync.peers,
+    },
+  };
+});
 
 // --- Interfaccia -----------------------------------------------------------
 const DIST = path.join(ROOT, 'dist');

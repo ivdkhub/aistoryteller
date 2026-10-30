@@ -126,33 +126,67 @@ function strip(data: Record<string, unknown>) {
   return rest;
 }
 
-export function create<K extends Kind>(kind: K, input: Partial<ItemByKind[K]>, opts: { id?: string; createdAt?: string } = {}): ItemByKind[K] {
+type WriteHook = (event: { type: 'upsert' | 'delete'; ids: string[] }) => void;
+let onWriteHook: WriteHook | null = null;
+export function setWriteHook(fn: WriteHook | null) {
+  onWriteHook = fn;
+}
+
+export function create<K extends Kind>(kind: K, input: Partial<ItemByKind[K]>, opts: { id?: string; createdAt?: string; updatedAt?: string; silentSync?: boolean } = {}): ItemByKind[K] {
   const data: Record<string, unknown> = { ...defaults(kind), ...strip(input as Record<string, unknown>) };
   fillLinks(data);
   const id = opts.id ?? randomUUID();
   const now = new Date().toISOString();
+  const createdAt = opts.createdAt ?? now;
+  const updatedAt = opts.updatedAt ?? now;
   db.prepare(
     'INSERT INTO items (id, kind, account_id, project_id, episode_id, shot_id, character_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-  ).run(id, kind, ...linkValues(data), JSON.stringify(data), opts.createdAt ?? now, now);
+  ).run(id, kind, ...linkValues(data), JSON.stringify(data), createdAt, updatedAt);
+  if (!opts.silentSync && onWriteHook) onWriteHook({ type: 'upsert', ids: [id] });
   return get(kind, id)!;
 }
 
-export function update<K extends Kind>(kind: K, id: string, patch: Partial<ItemByKind[K]>): ItemByKind[K] | undefined {
+export function update<K extends Kind>(kind: K, id: string, patch: Partial<ItemByKind[K]>, opts: { updatedAt?: string; silentSync?: boolean } = {}): ItemByKind[K] | undefined {
   const current = get(kind, id);
   if (!current) return undefined;
   const data: Record<string, unknown> = { ...strip(current as unknown as Record<string, unknown>), ...strip(patch as Record<string, unknown>) };
   fillLinks(data);
+  const updatedAt = opts.updatedAt ?? new Date().toISOString();
   db.prepare(
     'UPDATE items SET account_id = ?, project_id = ?, episode_id = ?, shot_id = ?, character_id = ?, data = ?, updated_at = ? WHERE id = ?',
-  ).run(...linkValues(data), JSON.stringify(data), new Date().toISOString(), id);
+  ).run(...linkValues(data), JSON.stringify(data), updatedAt, id);
+  if (!opts.silentSync && onWriteHook) onWriteHook({ type: 'upsert', ids: [id] });
   return get(kind, id);
 }
 
+/** Inserisce o aggiorna un elemento mantenendo id, createdAt e updatedAt originali (usato dalla sincronizzazione). */
+export function upsertRaw(item: Item) {
+  const data: Record<string, unknown> = { ...defaults(item.kind), ...strip(item as unknown as Record<string, unknown>) };
+  fillLinks(data);
+  const existing = getAny(item.id);
+  const createdAt = item.createdAt || existing?.createdAt || new Date().toISOString();
+  const updatedAt = item.updatedAt || new Date().toISOString();
+  if (existing) {
+    db.prepare(
+      'UPDATE items SET kind = ?, account_id = ?, project_id = ?, episode_id = ?, shot_id = ?, character_id = ?, data = ?, created_at = ?, updated_at = ? WHERE id = ?',
+    ).run(item.kind, ...linkValues(data), JSON.stringify(data), createdAt, updatedAt, item.id);
+  } else {
+    db.prepare(
+      'INSERT INTO items (id, kind, account_id, project_id, episode_id, shot_id, character_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(item.id, item.kind, ...linkValues(data), JSON.stringify(data), createdAt, updatedAt);
+  }
+}
+
 /** Elimina un elemento e tutto ciò che ne dipende. */
-export function remove(id: string): number {
+export function remove(id: string, opts: { silentSync?: boolean } = {}): number {
+  const rows = db
+    .prepare('SELECT id FROM items WHERE id = ? OR account_id = ? OR project_id = ? OR episode_id = ? OR shot_id = ?')
+    .all(id, id, id, id, id) as unknown as { id: string }[];
+  const ids = rows.map((r) => r.id);
   const res = db
     .prepare('DELETE FROM items WHERE id = ? OR account_id = ? OR project_id = ? OR episode_id = ? OR shot_id = ?')
     .run(id, id, id, id, id);
+  if (!opts.silentSync && ids.length && onWriteHook) onWriteHook({ type: 'delete', ids });
   return Number(res.changes);
 }
 
@@ -187,12 +221,20 @@ export function transaction<T>(fn: () => T): T {
 
 /** Sostituisce o fonde l'intero archivio (import JSON). */
 export function importAll(items: Item[], mode: 'merge' | 'replace') {
+  const deletedIds: string[] = [];
   transaction(() => {
-    if (mode === 'replace') db.exec('DELETE FROM items');
+    if (mode === 'replace') {
+      const existing = db.prepare('SELECT id FROM items').all() as unknown as { id: string }[];
+      const incoming = new Set(items.map((i) => i.id));
+      for (const r of existing) if (!incoming.has(r.id)) deletedIds.push(r.id);
+      db.exec('DELETE FROM items');
+    }
     for (const it of items) {
       if (!isKind(it.kind)) continue;
       db.prepare('DELETE FROM items WHERE id = ?').run(it.id);
-      create(it.kind, it as never, { id: it.id, createdAt: it.createdAt });
+      create(it.kind, it as never, { id: it.id, createdAt: it.createdAt, updatedAt: it.updatedAt, silentSync: true });
     }
   });
+  if (deletedIds.length && onWriteHook) onWriteHook({ type: 'delete', ids: deletedIds });
+  if (items.length && onWriteHook) onWriteHook({ type: 'upsert', ids: items.map((i) => i.id) });
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { api, useFetch, useItems, watchChanges } from '../api.ts';
+import { api, bump, request, useFetch, useItems, useSyncBrief, watchChanges } from '../api.ts';
 import { Area, Avatar, Field, Modal, Select, Text } from './ui.tsx';
 import { AccountForm } from './forms.tsx';
 import { Icon, type IconName } from './Icon.tsx';
@@ -93,6 +93,7 @@ export function Layout() {
       items: [
         { label: 'Informazioni su AI Story Teller', run: () => setAbout(true) },
         'sep',
+        { label: 'Sincronizzazione Google Drive…', run: () => navigate('/import') },
         { label: 'Scorciatoie da tastiera', run: () => setShortcuts(true) },
       ],
     },
@@ -102,6 +103,7 @@ export function Layout() {
         { label: 'Nuovo account…', run: () => setNewAccount(true) },
         { label: 'Nuova idea…', key: 'Ctrl K', run: () => setQuickIdea(true) },
         'sep',
+        { label: 'Sincronizza ora col socio', run: () => void request('/sync/now', { method: 'POST' }).then(() => bump()) },
         { label: 'Importa una serie…', run: () => navigate('/import') },
         { label: 'Scarica il backup', run: () => (window.location.href = '/api/export') },
       ],
@@ -216,7 +218,7 @@ export function Layout() {
             </span>
             <p>
               Lo studio locale per i tuoi contenuti Instagram: account, progetti, personaggi, prompt e produzione degli episodi.
-              I dati restano su questo computer.
+              I dati restano su questo computer e possono sincronizzarsi con il tuo socio tramite cartella Google Drive.
             </p>
             <AboutDetails />
           </div>
@@ -272,6 +274,73 @@ interface MenuDef {
   label: string;
   strong?: boolean;
   items: MenuItem[];
+}
+
+function SyncMenubarBadge() {
+  const sync = useSyncBrief();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+
+  if (!sync || !sync.enabled) {
+    return (
+      <button
+        className="menubar-item sync-pill sync-disabled"
+        title="Collaborazione Google Drive non attiva — clicca per configurarla"
+        onClick={() => navigate('/import')}
+      >
+        <Icon name="cloud" size={13} />
+        <span>Drive spento</span>
+      </button>
+    );
+  }
+
+  const peerNames = sync.peers.map((p) => p.nodeName).join(', ');
+  const isError = sync.state === 'error' || !!sync.error;
+  const isSyncing = busy || sync.state === 'syncing';
+  const label = isError
+    ? 'Drive: errore'
+    : isSyncing
+      ? 'Sincronizzo…'
+      : sync.peers.length > 0
+        ? `Drive · ${sync.peers[0].nodeName}`
+        : 'Drive attivo';
+
+  const tip = isError
+    ? `Errore di sincronizzazione: ${sync.error}`
+    : [
+        `Cartella Google Drive: ${sync.folder}`,
+        `La tua postazione: ${sync.nodeName}`,
+        sync.peers.length ? `Soci sincronizzati: ${peerNames}` : 'In attesa che il socio apra la stessa cartella Drive',
+        'Clicca per forzare una sincronizzazione immediata (tasto destro o Shift+Clic per le impostazioni)',
+      ].join('\n');
+
+  return (
+    <button
+      className={`menubar-item sync-pill sync-${isError ? 'error' : isSyncing ? 'syncing' : 'idle'}`}
+      title={tip}
+      onClick={async (e) => {
+        if (e.shiftKey || isError) {
+          navigate('/import');
+          return;
+        }
+        setBusy(true);
+        try {
+          await request('/sync/now', { method: 'POST' });
+          bump();
+        } finally {
+          setBusy(false);
+        }
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        navigate('/import');
+      }}
+    >
+      <span className="sync-dot" aria-hidden />
+      <Icon name="cloud" size={13} />
+      <span>{label}</span>
+    </button>
+  );
 }
 
 function MenuBar({ menus }: { menus: MenuDef[] }) {
@@ -341,6 +410,7 @@ function MenuBar({ menus }: { menus: MenuDef[] }) {
         </div>
       ))}
       <span className="grow" />
+      <SyncMenubarBadge />
       <span className="menubar-clock">{clock}</span>
     </div>
   );

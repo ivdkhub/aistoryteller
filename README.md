@@ -44,6 +44,32 @@ già aperta, `start.bat` apre solo il browser. Per fermarla chiudi la finestra n
 - **Calendario** mensile e settimanale con orari; i post satellite mostrano l'episodio a cui sono legati.
 - **Import di una serie** da un documento di stagione (es. `Bank_error_S1_copioni_e_prompt.txt`) e **scanner**
   che collega i file `EPxx_Syy.png` / `EPxx_Syy_VID.mp4` alle inquadrature.
+- **Collaborazione in tempo reale su Google Drive**: sincronizzazione continua e rapida con il tuo socio tramite
+  una cartella condivisa di Google Drive per Desktop, senza blocchi né conflitti sul database SQLite.
+
+## Collaborazione con il socio (Google Drive)
+
+Non mettere il file `data/storyteller.db` direttamente su Google Drive (SQLite usa lock e file WAL che andrebbero
+in conflitto se aperti da due PC contemporaneamente). Usa invece la **Sincronizzazione continua** integrata:
+
+1. Su entrambi i PC installate **Google Drive per Desktop** e condividete una cartella (es. `G:\Il mio Drive\AI Story Teller Sync`).
+2. Aprite *Import e backup → Collaborazione in tempo reale (Google Drive)*, scegliete la cartella condivisa
+   (o cliccate sul suggerimento automatico del Drive rilevato), indicate il vostro nome e premete **Attiva sincronizzazione continua**.
+3. Come funziona internamente:
+   - Ogni PC legge e scrive sul proprio SQLite locale a velocità istantanea (< 1 ms).
+   - A ogni modifica (dopo 350 ms di pausa), il PC aggiorna in modo atomico solo il *proprio* file
+     `.storyteller-sync/snapshot-<nodeId>.json` nella cartella Drive: **zero conflitti di file su Google Drive**.
+   - Un watcher (`fs.watch` + controllo leggero del `mtime` ogni 1,5 s senza rileggere il JSON se invariato)
+     intercetta istantaneamente gli aggiornamenti del socio e li fonde in un'unica transazione SQLite:
+     - **Merge campo per campo (Field-level 3-way merge)**: se tu cambi il prompt immagine di un'inquadratura e
+       nello stesso secondo il tuo socio cambia il prompt video o lo stato della stessa inquadratura, entrambe le
+       modifiche vengono mantenute.
+     - **Tombstones**: le eliminazioni vengono tracciate con timestamp così gli elementi cancellati non resuscitano.
+     - **Media e percorsi portabili**: i file caricati in `data/media/` vengono copiati incrementalmente nella
+       cartella condivisa e i percorsi assoluti dei file sul Drive vengono tradotti automaticamente tra i due PC
+       anche se il Drive è montato con lettere o percorsi utente diversi.
+   - Nella barra in alto a destra (accanto all'orologio) trovi l'indicatore **Drive · <nome socio>**: cliccandolo
+     forzi una sincronizzazione immediata; con `Shift+Clic` o tasto destro apri le impostazioni.
 
 ## Dati
 
@@ -59,7 +85,12 @@ già aperta, `start.bat` apre solo il browser. Per fermarla chiudi la finestra n
 `config.local.json` (creato dall'app, non va condiviso), ad esempio:
 
 ```json
-{ "port": 5179, "allowedRoots": ["C:\\Users\\nome\\Documenti\\Contenuti"] }
+{
+  "port": 5179,
+  "allowedRoots": ["C:\\Users\\nome\\Documenti\\Contenuti"],
+  "syncFolder": "G:\\Il mio Drive\\AI Story Teller Sync",
+  "syncNodeName": "Marco"
+}
 ```
 
 Le API rispondono solo a richieste da questo computer (`localhost`) e dalla pagina dell'app.
@@ -67,7 +98,7 @@ Le API rispondono solo a richieste da questo computer (`localhost`) e dalla pagi
 ## Claude Code (server MCP)
 
 AI Story Teller include un server MCP: Claude Code può usare ogni funzione dell'app da qualsiasi cartella, e
-l'app aperta nel browser mostra le modifiche entro pochi secondi.
+l'app aperta nel browser mostra le modifiche entro pochi secondi (e le propaga automaticamente anche al socio su Google Drive).
 
 Registrazione (una volta sola, per tutte le cartelle):
 
@@ -81,7 +112,7 @@ Strumenti: `panoramica`, `schema_campi`, `albero_progetto`, `elenca`, `leggi` (a
 `cerca`, `avanzamento_episodio`, `crea`, `modifica`, `elimina`, `crea_struttura` (un progetto intero in un colpo
 solo, rilanciabile senza doppioni), `componi_prompt`, `importa_serie`, `scansiona_cartella`, `esporta_episodio`,
 `piano_cartelle`, `crea_cartelle`, `controlla_coerenza`, `stato_storia`, `lista_generazione`, `pacchetto_remotion`,
-`esporta_backup` (e `esporta_episodio` in markdown, CSV o testo per ElevenLabs).
+`esporta_backup`, `sincronizza_drive`.
 
 Comandi pronti in Claude Code:
 
@@ -99,7 +130,7 @@ Esempi di richieste:
 
 ```
 npm run dev        # server + Vite con ricarica automatica (http://localhost:5173)
-npm test           # test unitari (parser, scanner, avanzamento, strutture e cartelle)
+npm test           # test unitari (parser, scanner, avanzamento, strutture, cartelle e sync)
 npm run test:e2e   # usa l'app in Edge/Chrome headless; E2E_SEASON=<documento> prova anche l'import
 npm run typecheck
 npm run build      # rigenera dist/ dopo modifiche all'interfaccia
